@@ -1,0 +1,246 @@
+%General Mission Analysis Tool(GMAT) Script
+%Created: 2026-05-20 11:07:31
+
+
+%----------------------------------------
+%---------- Spacecraft
+%----------------------------------------
+
+Create Spacecraft Chaser;
+Chaser.DateFormat = TAIModJulian;
+Chaser.Epoch = '21545';
+Chaser.CoordinateSystem = EarthMJ2000Eq;
+Chaser.DisplayStateType = Cartesian;
+Chaser.X = -6885.175422;
+Chaser.Y = -1090.504656;
+Chaser.Z = 0;
+Chaser.VX = 0.499922;
+Chaser.VY = -3.156382;
+Chaser.VZ = -6.853258;
+Chaser.DryMass = 850;
+Chaser.Cd = 2.2;
+Chaser.Cr = 1.8;
+Chaser.DragArea = 15;
+Chaser.SRPArea = 1;
+Chaser.SPADDragScaleFactor = 1;
+Chaser.SPADSRPScaleFactor = 1;
+Chaser.AtmosDensityScaleFactor = 1;
+Chaser.ExtendedMassPropertiesModel = 'None';
+Chaser.NAIFId = -10000001;
+Chaser.NAIFIdReferenceFrame = -9000001;
+Chaser.OrbitColor = Red;
+Chaser.TargetColor = Teal;
+Chaser.OrbitErrorCovariance = [ 1e+70 0 0 0 0 0 ; 0 1e+70 0 0 0 0 ; 0 0 1e+70 0 0 0 ; 0 0 0 1e+70 0 0 ; 0 0 0 0 1e+70 0 ; 0 0 0 0 0 1e+70 ];
+Chaser.CdSigma = 1e+70;
+Chaser.CrSigma = 1e+70;
+Chaser.Id = 'SatId';
+Chaser.Attitude = CoordinateSystemFixed;
+Chaser.SPADSRPInterpolationMethod = Bilinear;
+Chaser.SPADSRPScaleFactorSigma = 1e+70;
+Chaser.SPADDragInterpolationMethod = Bilinear;
+Chaser.SPADDragScaleFactorSigma = 1e+70;
+Chaser.AtmosDensityScaleFactorSigma = 1e+70;
+Chaser.ModelFile = 'aura.3ds';
+Chaser.ModelOffsetX = 0;
+Chaser.ModelOffsetY = 0;
+Chaser.ModelOffsetZ = 0;
+Chaser.ModelRotationX = 0;
+Chaser.ModelRotationY = 0;
+Chaser.ModelRotationZ = 0;
+Chaser.ModelScale = 1;
+Chaser.AttitudeDisplayStateType = 'Quaternion';
+Chaser.AttitudeRateDisplayStateType = 'AngularVelocity';
+Chaser.AttitudeCoordinateSystem = EarthMJ2000Eq;
+Chaser.EulerAngleSequence = '321';
+
+Create Spacecraft Targ;
+Targ.DateFormat = TAIModJulian;
+Targ.Epoch = '21545';
+Targ.CoordinateSystem = EarthMJ2000Eq;
+Targ.DisplayStateType = Cartesian;
+Targ.X = 0;
+Targ.Y = 6971;
+Targ.Z = 0;
+Targ.VX = -5.34;
+Targ.VY = 0;
+Targ.VZ = 5.34;
+Targ.DryMass = 850;
+Targ.Cd = 2.2;
+Targ.Cr = 1.8;
+Targ.DragArea = 15;
+Targ.SRPArea = 1;
+Targ.SPADDragScaleFactor = 1;
+Targ.SPADSRPScaleFactor = 1;
+Targ.AtmosDensityScaleFactor = 1;
+Targ.ExtendedMassPropertiesModel = 'None';
+Targ.NAIFId = -10001001;
+Targ.NAIFIdReferenceFrame = -9001001;
+Targ.OrbitColor = Green;
+Targ.TargetColor = LightGray;
+Targ.OrbitErrorCovariance = [ 1e+70 0 0 0 0 0 ; 0 1e+70 0 0 0 0 ; 0 0 1e+70 0 0 0 ; 0 0 0 1e+70 0 0 ; 0 0 0 0 1e+70 0 ; 0 0 0 0 0 1e+70 ];
+Targ.CdSigma = 1e+70;
+Targ.CrSigma = 1e+70;
+Targ.Id = 'SatId';
+Targ.Attitude = CoordinateSystemFixed;
+Targ.SPADSRPInterpolationMethod = Bilinear;
+Targ.SPADSRPScaleFactorSigma = 1e+70;
+Targ.SPADDragInterpolationMethod = Bilinear;
+Targ.SPADDragScaleFactorSigma = 1e+70;
+Targ.AtmosDensityScaleFactorSigma = 1e+70;
+Targ.ModelFile = 'aura.3ds';
+Targ.ModelOffsetX = 0;
+Targ.ModelOffsetY = 0;
+Targ.ModelOffsetZ = 0;
+Targ.ModelRotationX = 0;
+Targ.ModelRotationY = 0;
+Targ.ModelRotationZ = 0;
+Targ.ModelScale = 1;
+Targ.AttitudeDisplayStateType = 'Quaternion';
+Targ.AttitudeRateDisplayStateType = 'AngularVelocity';
+Targ.AttitudeCoordinateSystem = EarthMJ2000Eq;
+Targ.EulerAngleSequence = '321';
+
+
+%----------------------------------------
+%---------- ForceModels
+%----------------------------------------
+
+Create ForceModel DefaultProp_ForceModel;
+DefaultProp_ForceModel.CentralBody = Earth;
+DefaultProp_ForceModel.PrimaryBodies = {Earth};
+DefaultProp_ForceModel.Drag = None;
+DefaultProp_ForceModel.SRP = Off;
+DefaultProp_ForceModel.RelativisticCorrection = Off;
+DefaultProp_ForceModel.ErrorControl = RSSStep;
+DefaultProp_ForceModel.GravityField.Earth.Degree = 4;
+DefaultProp_ForceModel.GravityField.Earth.Order = 4;
+DefaultProp_ForceModel.GravityField.Earth.StmLimit = 100;
+DefaultProp_ForceModel.GravityField.Earth.PotentialFile = 'JGM2.cof';
+DefaultProp_ForceModel.GravityField.Earth.TideModel = 'None';
+
+%----------------------------------------
+%---------- Propagators
+%----------------------------------------
+
+Create Propagator DefaultProp;
+DefaultProp.FM = DefaultProp_ForceModel;
+DefaultProp.Type = RungeKutta89;
+DefaultProp.InitialStepSize = 60;
+DefaultProp.Accuracy = 9.999999999999999e-12;
+DefaultProp.MinStep = 0.001;
+DefaultProp.MaxStep = 2700;
+DefaultProp.MaxStepAttempts = 50;
+DefaultProp.StopIfAccuracyIsViolated = true;
+
+%----------------------------------------
+%---------- Burns
+%----------------------------------------
+
+Create ImpulsiveBurn ImpulsiveBurn1;
+ImpulsiveBurn1.CoordinateSystem = EarthMJ2000Eq;
+ImpulsiveBurn1.Element1 = -1.249044;
+ImpulsiveBurn1.Element2 = -2.140511;
+ImpulsiveBurn1.Element3 = -0.888025;
+ImpulsiveBurn1.DecrementMass = false;
+ImpulsiveBurn1.Isp = 300;
+ImpulsiveBurn1.GravitationalAccel = 9.81;
+
+Create ImpulsiveBurn ImpulsiveBurn2;
+ImpulsiveBurn2.CoordinateSystem = EarthMJ2000Eq;
+ImpulsiveBurn2.Element1 = 4.007819;
+ImpulsiveBurn2.Element2 = -2.385752;
+ImpulsiveBurn2.Element3 = 7.508012;
+ImpulsiveBurn2.DecrementMass = false;
+ImpulsiveBurn2.Isp = 300;
+ImpulsiveBurn2.GravitationalAccel = 9.81;
+
+%----------------------------------------
+%---------- Subscribers
+%----------------------------------------
+
+Create OpenFramesInterface DefaultOrbitView;
+DefaultOrbitView.SolverIterations = Current;
+DefaultOrbitView.UpperLeft = [ 0.08764705882352941 0.1839506172839506 ];
+DefaultOrbitView.Size = [ 0.5976470588235294 0.5950617283950618 ];
+DefaultOrbitView.RelativeZOrder = 122;
+DefaultOrbitView.Maximized = true;
+DefaultOrbitView.Add = {Chaser, Targ, Earth};
+DefaultOrbitView.View = {DefaultOrbitView_View};
+DefaultOrbitView.CoordinateSystem = EarthMJ2000Eq;
+DefaultOrbitView.DrawObject = [ true true true ];
+DefaultOrbitView.DrawTrajectory = [ true true true ];
+DefaultOrbitView.DrawAxes = [ false false false ];
+DefaultOrbitView.DrawXYPlane = [ false false false ];
+DefaultOrbitView.DrawLabel = [ true true true ];
+DefaultOrbitView.DrawUsePropLabel = [ false false false ];
+DefaultOrbitView.DrawCenterPoint = [ true true true ];
+DefaultOrbitView.DrawEndPoints = [ true true true ];
+DefaultOrbitView.DrawVelocity = [ false false false ];
+DefaultOrbitView.DrawGrid = [ false false false ];
+DefaultOrbitView.DrawLineWidth = [ 2 2 2 ];
+DefaultOrbitView.DrawMarkerSize = [ 10 10 10 ];
+DefaultOrbitView.DrawFontSize = [ 20 20 20 ];
+DefaultOrbitView.Axes = On;
+DefaultOrbitView.AxesLength = 12770.2726;
+DefaultOrbitView.AxesLabels = On;
+DefaultOrbitView.FrameLabel = Off;
+DefaultOrbitView.XYPlane = On;
+DefaultOrbitView.EclipticPlane = Off;
+DefaultOrbitView.EnableStars = On;
+DefaultOrbitView.StarCatalog = 'inp_StarsHYGv3.txt';
+DefaultOrbitView.StarCount = 40000;
+DefaultOrbitView.MinStarMag = -2;
+DefaultOrbitView.MaxStarMag = 6;
+DefaultOrbitView.MinStarPixels = 1;
+DefaultOrbitView.MaxStarPixels = 10;
+DefaultOrbitView.MinStarDimRatio = 0.5;
+DefaultOrbitView.ShowPlot = true;
+DefaultOrbitView.ShowToolbar = true;
+DefaultOrbitView.SolverIterLastN = 1;
+DefaultOrbitView.ShowVR = false;
+DefaultOrbitView.PlaybackTimeScale = 3600;
+DefaultOrbitView.MultisampleAntiAliasing = On;
+DefaultOrbitView.MSAASamples = 2;
+DefaultOrbitView.DrawFontPosition = {'Top-Right', 'Top-Right', 'Top-Right'};
+
+Create GroundTrack DefaultGroundTrackPlot;
+DefaultGroundTrackPlot.SolverIterations = Current;
+DefaultGroundTrackPlot.UpperLeft = [ 0.001764705882352941 0 ];
+DefaultGroundTrackPlot.Size = [ 0.5 0.4506172839506173 ];
+DefaultGroundTrackPlot.RelativeZOrder = 75;
+DefaultGroundTrackPlot.Maximized = false;
+DefaultGroundTrackPlot.CentralBody = Earth;
+DefaultGroundTrackPlot.Add = {Chaser};
+DefaultGroundTrackPlot.DataCollectFrequency = 1;
+DefaultGroundTrackPlot.UpdatePlotFrequency = 50;
+DefaultGroundTrackPlot.NumPointsToRedraw = 0;
+DefaultGroundTrackPlot.MaxPlotPoints = 20000;
+DefaultGroundTrackPlot.ShowPlot = true;
+
+%----------------------------------------
+%---------- User Objects
+%----------------------------------------
+
+Create OpenFramesView DefaultOrbitView_View;
+DefaultOrbitView_View.ViewFrame = CoordinateSystem;
+DefaultOrbitView_View.ViewTrajectory = Off;
+DefaultOrbitView_View.InertialFrame = Off;
+DefaultOrbitView_View.SetDefaultLocation = On;
+DefaultOrbitView_View.DefaultEye = [ 30000 0 0 ];
+DefaultOrbitView_View.DefaultCenter = [ 0 0 0 ];
+DefaultOrbitView_View.DefaultUp = [ 0 0 1 ];
+DefaultOrbitView_View.SetCurrentLocation = On;
+DefaultOrbitView_View.CurrentEye = [ 19015.77065033072 23202.83028903102 -170.6843649685277 ];
+DefaultOrbitView_View.CurrentCenter = [ -1.455191522836685e-11 -2.182787284255028e-11 8.72546479513403e-12 ];
+DefaultOrbitView_View.CurrentUp = [ -0.4889535662099504 0.4063975353069001 0.7718584412876811 ];
+DefaultOrbitView_View.FOVy = 45;
+
+
+%----------------------------------------
+%---------- Mission Sequence
+%----------------------------------------
+
+BeginMissionSequence;
+Maneuver ImpulsiveBurn1(Chaser);
+Propagate DefaultProp(Chaser, Targ) {Chaser.ElapsedSecs = 18438.294145};
+Maneuver ImpulsiveBurn1(Chaser);
