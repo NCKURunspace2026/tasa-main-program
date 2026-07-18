@@ -1,0 +1,537 @@
+/* ========================================
+   Solutions page
+======================================== */
+
+.solutions-page {
+  --solutions-table-height: 350px;
+
+  width: 100%;
+  height: calc(100vh - 112px);
+  min-width: 0;
+  min-height: 720px;
+
+  display: grid;
+
+  grid-template-rows:
+    auto
+    var(--solutions-table-height)
+    16px
+    minmax(320px, 1fr);
+
+  overflow: hidden;
+}
+
+.solutions-page-header {
+  min-width: 0;
+  margin-bottom: 20px;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+
+  gap: 36px;
+}
+
+.solutions-title-group {
+  min-width: 0;
+  flex: 0 1 620px;
+}
+
+.solutions-title-group h1 {
+  margin: 0;
+
+  color: var(--text-primary);
+  font-size: clamp(32px, 4vw, 52px);
+  line-height: 1.05;
+}
+
+/* ========================================
+   Scenario selector
+======================================== */
+
+.scenario-field {
+  width: min(100%, 400px);
+  flex: 0 1 400px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+.scenario-field label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scenario-field select {
+  width: 100%;
+  min-height: 44px;
+
+  padding:
+    0
+    56px
+    0
+    14px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background-color: var(--surface);
+  color: var(--text-primary);
+
+  font: inherit;
+
+  cursor: pointer;
+}
+
+.scenario-field select:hover {
+  border-color:
+    rgba(120, 183, 242, 0.65);
+}
+
+.scenario-field select:focus-visible {
+  outline: 2px solid #78b7f2;
+  outline-offset: 2px;
+}
+
+/* ========================================
+   Shared solution panels
+======================================== */
+
+.solutions-panel {
+  min-width: 0;
+  min-height: 0;
+
+  padding: 20px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  background: var(--surface);
+
+  overflow: hidden;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.panel-header,
+.selected-solution-header {
+  min-width: 0;
+  margin-bottom: 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.panel-header h2,
+.selected-solution-header h2 {
+  margin: 0;
+
+  color: var(--text-primary);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.panel-eyebrow {
+  margin: 0 0 6px;
+
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.solution-count {
+  padding: 6px 10px;
+
+  border: 1px solid var(--border);
+  border-radius: 999px;
+
+  color: var(--text-secondary);
+  font-size: 13px;
+
+  white-space: nowrap;
+}
+
+/* ========================================
+   Solutions table panel
+======================================== */
+
+.solutions-table-panel {
+  display: flex;
+  flex-direction: column;
+
+  border-bottom-color:
+    rgba(120, 183, 242, 0.28);
+}
+
+.solutions-table-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+
+  overflow: auto;
+}
+
+/* ========================================
+   Resizable divider
+======================================== */
+
+.solutions-resizer {
+  position: relative;
+
+  min-width: 0;
+  height: 16px;
+
+  border-top:
+    1px solid
+    rgba(120, 183, 242, 0.14);
+
+  border-bottom:
+    1px solid
+    rgba(120, 183, 242, 0.14);
+
+  background:
+    rgba(120, 183, 242, 0.07);
+
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.solutions-resizer:hover,
+.solutions-resizer:focus-visible {
+  border-color:
+    rgba(120, 183, 242, 0.52);
+
+  background:
+    rgba(120, 183, 242, 0.16);
+
+  box-shadow:
+    0 0 14px
+    rgba(59, 130, 246, 0.12);
+}
+
+.solutions-resizer:focus-visible {
+  outline: none;
+}
+
+.solutions-resizer-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+
+  width: 72px;
+  height: 4px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(148, 197, 244, 0.72);
+
+  box-shadow:
+    0 0 0 1px
+      rgba(120, 183, 242, 0.12),
+    0 0 12px
+      rgba(59, 130, 246, 0.14);
+
+  transform: translate(-50%, -50%);
+
+  transition:
+    width 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.solutions-resizer:hover
+  .solutions-resizer-handle,
+.solutions-resizer:focus-visible
+  .solutions-resizer-handle {
+  width: 104px;
+
+  background: #78b7f2;
+
+  box-shadow:
+    0 0 0 1px
+      rgba(120, 183, 242, 0.3),
+    0 0 16px
+      rgba(59, 130, 246, 0.3);
+}
+
+.solutions-page:has(
+    .solutions-resizer:hover
+  )
+  .solutions-table-panel {
+  border-bottom-color:
+    rgba(120, 183, 242, 0.62);
+
+  box-shadow:
+    0 8px 16px
+    rgba(59, 130, 246, 0.05);
+}
+
+.solutions-page:has(
+    .solutions-resizer:hover
+  )
+  .solution-details-panel {
+  border-top-color:
+    rgba(120, 183, 242, 0.62);
+
+  box-shadow:
+    0 -8px 16px
+    rgba(59, 130, 246, 0.05);
+}
+
+body.is-resizing-solutions {
+  cursor: row-resize;
+  user-select: none;
+}
+
+/* ========================================
+   Selected solution details
+======================================== */
+
+.solution-details-panel {
+  display: flex;
+  flex-direction: column;
+
+  border-top-color:
+    rgba(120, 183, 242, 0.28);
+}
+
+.selected-solution-title {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+}
+
+.validation-badge {
+  display: inline-flex;
+  align-items: center;
+
+  min-height: 26px;
+  padding: 0 9px;
+
+  border-radius: 7px;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.validation-badge.is-valid {
+  border:
+    1px solid
+    rgba(52, 211, 153, 0.22);
+
+  background:
+    rgba(52, 211, 153, 0.1);
+
+  color: #4ade80;
+}
+
+.validation-badge.is-pending {
+  border:
+    1px solid
+    rgba(251, 191, 36, 0.24);
+
+  background:
+    rgba(251, 191, 36, 0.1);
+
+  color: #fbbf24;
+}
+
+.solution-tabs {
+  min-width: 0;
+}
+
+.solution-tab-content {
+  min-width: 0;
+  min-height: 0;
+
+  flex: 1;
+
+  padding-top: 20px;
+
+  overflow: auto;
+}
+
+/* ========================================
+   Summary tab
+======================================== */
+
+.solution-summary-layout {
+  width: 100%;
+  height: 100%;
+
+  min-width: 0;
+  min-height: 280px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(280px, 0.8fr)
+    minmax(420px, 1.2fr);
+
+  gap: 16px;
+}
+
+.solution-metadata,
+.trajectory-preview {
+  min-width: 0;
+  min-height: 0;
+
+  padding: 16px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  background:
+    rgba(3, 11, 22, 0.2);
+}
+
+.solution-metadata h3,
+.trajectory-preview h3,
+.detail-placeholder h3 {
+  margin: 0 0 16px;
+
+  color: var(--text-primary);
+  font-size: 17px;
+}
+
+.trajectory-preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.trajectory-preview-header {
+  flex: 0 0 auto;
+}
+
+.trajectory-placeholder {
+  min-height: 220px;
+  flex: 1;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+
+  color: var(--text-secondary);
+}
+
+.trajectory-placeholder p {
+  margin: 0;
+}
+
+/* ========================================
+   Placeholder tabs
+======================================== */
+
+.detail-placeholder {
+  min-height: 240px;
+  padding: 24px;
+
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+
+  color: var(--text-secondary);
+}
+
+.detail-placeholder p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.solution-empty-state {
+  min-height: 220px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+
+  color: var(--text-secondary);
+}
+
+/* ========================================
+   Responsive layout
+======================================== */
+
+@media (max-width: 1100px) {
+  .solutions-page {
+    height: auto;
+    min-height: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: visible;
+  }
+
+  .solutions-page-header {
+    align-items: stretch;
+    flex-direction: column;
+
+    gap: 24px;
+  }
+
+  .solutions-title-group {
+    flex-basis: auto;
+  }
+
+  .scenario-field {
+    width: 400px;
+    flex-basis: auto;
+  }
+
+  .solutions-table-panel {
+    height: 360px;
+  }
+
+  .solutions-resizer {
+    display: none;
+  }
+
+  .solution-details-panel {
+    min-height: 520px;
+  }
+
+  .solution-summary-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .trajectory-preview {
+    min-height: 320px;
+  }
+}
+
+@media (max-width: 700px) {
+  .solutions-panel {
+    padding: 14px;
+  }
+
+  .solution-summary-layout {
+    min-height: 0;
+  }
+
+  .selected-solution-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

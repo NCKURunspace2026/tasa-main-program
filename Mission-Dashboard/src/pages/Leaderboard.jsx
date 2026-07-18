@@ -1,0 +1,358 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./Pages.css";
+import "./Leaderboard.css";
+
+import PageHeader from "../components/PageHeader.jsx";
+import useScenarios from "../hooks/useScenarios.js";
+import { getLeaderboard, getSolutionDetail } from "../services/api.js";
+
+import { Table, pixel } from "@astryxdesign/core/Table";
+import { Tab, TabList } from "@astryxdesign/core/TabList";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+
+const detailTabs = [
+  ["summary", "Summary"],
+  ["optimization", "Optimization"],
+  ["final", "Decision Variables"],
+  ["initial", "Initial Guess"],
+  ["constraints", "Constraints"],
+];
+
+export default function Leaderboard() {
+  const {
+    scenarioOptions,
+    scenarioError,
+    scenariosLoaded,
+  } = useScenarios();
+  const query = useMemo(() => new URLSearchParams(window.location.search), []);
+  const [scenarioId, setScenarioId] = useState(
+    query.get("scenarioId") ?? "SC-001",
+  );
+  const [selectedSolutionId, setSelectedSolutionId] = useState(
+    query.get("solutionId"),
+  );
+  const [selectedSolution, setSelectedSolution] = useState(null);
+  const [selectedTab, setSelectedTab] = useState("summary");
+  const [leaderboard, setLeaderboard] = useState({ items: [], total: 0 });
+  const [search, setSearch] = useState("");
+  const [method, setMethod] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [detailError, setDetailError] = useState("");
+  const detailRef = useRef(null);
+
+  useEffect(() => {
+    if (
+      scenariosLoaded &&
+      scenarioOptions.length > 0 &&
+      !scenarioOptions.some((scenario) => scenario.id === scenarioId)
+    ) {
+      setScenarioId(scenarioOptions[0].id);
+      setSelectedSolutionId(null);
+    }
+  }, [scenarioId, scenarioOptions, scenariosLoaded]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setIsLoading(true);
+    setError("");
+
+    getLeaderboard(scenarioId, {
+      page: "1",
+      pageSize: "100",
+      ...(search ? { search } : {}),
+      ...(method ? { method } : {}),
+    })
+      .then((result) => {
+        if (!isCurrent) return;
+        setLeaderboard(result);
+        if (!selectedSolutionId && result.items.length > 0) {
+          setSelectedSolutionId(result.items[0].solutionId);
+        }
+      })
+      .catch((requestError) => {
+        if (isCurrent) setError(requestError.message);
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoading(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [scenarioId, search, method, selectedSolutionId]);
+
+  useEffect(() => {
+    if (!selectedSolutionId) {
+      setSelectedSolution(null);
+      return undefined;
+    }
+
+    let isCurrent = true;
+    setDetailError("");
+    getSolutionDetail(selectedSolutionId)
+      .then((result) => {
+        if (isCurrent) setSelectedSolution(result);
+      })
+      .catch((requestError) => {
+        if (isCurrent) setDetailError(requestError.message);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedSolutionId]);
+
+  const handleSelectSolution = useCallback((solutionId) => {
+    setSelectedSolutionId(solutionId);
+    setSelectedTab("summary");
+    const params = new URLSearchParams(window.location.search);
+    params.set("page", "leaderboard");
+    params.set("scenarioId", scenarioId);
+    params.set("solutionId", solutionId);
+    window.history.replaceState({}, "", `?${params.toString()}`);
+    requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  }, [scenarioId]);
+
+  const selectionPlugin = useMemo(
+    () => ({
+      transformBodyRow(props, item) {
+        const isSelected = item.solutionId === selectedSolutionId;
+        return {
+          ...props,
+          htmlProps: {
+            ...props.htmlProps,
+            className: isSelected ? "leaderboard-row is-selected" : "leaderboard-row",
+            tabIndex: 0,
+            "aria-selected": isSelected,
+            onClick: () => handleSelectSolution(item.solutionId),
+            onKeyDown: (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelectSolution(item.solutionId);
+              }
+            },
+          },
+        };
+      },
+    }),
+    [handleSelectSolution, selectedSolutionId],
+  );
+
+  const columns = useMemo(
+    () => [
+      { key: "rank", header: "Rank", width: pixel(70) },
+      {
+        key: "solutionName",
+        header: "Solution",
+        width: pixel(260),
+        renderCell: (item) => (
+          <span className="leaderboard-solution-cell">
+            <strong>{item.solutionId}</strong>
+            <small>{item.solutionName}</small>
+          </span>
+        ),
+      },
+      { key: "method", header: "Method", width: pixel(120) },
+      {
+        key: "officialScore",
+        header: "Official Score",
+        width: pixel(130),
+        renderCell: (item) => item.officialScore.toFixed(2),
+      },
+      {
+        key: "finalDistance",
+        header: "Distance (km)",
+        width: pixel(135),
+        renderCell: (item) => item.finalDistance.toFixed(4),
+      },
+      {
+        key: "totalDeltaV",
+        header: "Delta-V (km/s)",
+        width: pixel(145),
+        renderCell: (item) => item.totalDeltaV.toFixed(4),
+      },
+      {
+        key: "totalTime",
+        header: "Time (s)",
+        width: pixel(125),
+        renderCell: (item) => item.totalTime.toFixed(2),
+      },
+      { key: "burnCount", header: "Burns", width: pixel(75) },
+      { key: "status", header: "Status", width: pixel(110) },
+    ],
+    [],
+  );
+
+  function handleScenarioChange(event) {
+    setScenarioId(event.target.value);
+    setSelectedSolutionId(null);
+    setSelectedSolution(null);
+  }
+
+  return (
+    <section className="leaderboard-page">
+      <PageHeader
+        className="leaderboard-page-header"
+        title="Leaderboard"
+        description="Rank validated solutions and inspect the complete solution record."
+        scenarioId={scenarioId}
+        scenarioOptions={scenarioOptions}
+        onScenarioChange={handleScenarioChange}
+      />
+
+      <section className="leaderboard-panel leaderboard-table-panel">
+        <header className="leaderboard-panel-header">
+          <div>
+            <span className="ranking-mode-label">Official ranking</span>
+            <h2>Validated Solutions</h2>
+          </div>
+          <span className="live-status"><span className="live-status-dot" />{leaderboard.total} solutions</span>
+        </header>
+
+        <div className="leaderboard-filters">
+          <label>
+            <span>Search</span>
+            <input value={search} placeholder="Solution ID or name" onChange={(event) => setSearch(event.target.value)} />
+          </label>
+          <label>
+            <span>Method</span>
+            <input value={method} placeholder="All methods" onChange={(event) => setMethod(event.target.value)} />
+          </label>
+        </div>
+
+        {scenarioError ? <div className="leaderboard-request-state is-error">Scenario list is temporarily unavailable.</div> : null}
+        {error ? <div className="leaderboard-request-state is-error">{error}</div> : null}
+        {isLoading ? <div className="leaderboard-request-state">Loading leaderboard…</div> : null}
+
+        {!error && !isLoading ? (
+          <div className="leaderboard-table-scroll">
+            <Table
+              data={leaderboard.items}
+              columns={columns}
+              idKey="solutionId"
+              hasHover
+              textOverflow="wrap"
+              plugins={{ selection: selectionPlugin }}
+            />
+          </div>
+        ) : null}
+      </section>
+
+      <section ref={detailRef} className="leaderboard-panel solution-detail-panel">
+        <header className="solution-detail-header">
+          <div>
+            <p className="submission-panel-eyebrow">Selected solution</p>
+            <h2>{selectedSolution?.solutionId ?? "Solution Details"}</h2>
+          </div>
+          {selectedSolution ? <span className="solution-detail-status">Validated</span> : null}
+        </header>
+
+        {detailError ? <div className="leaderboard-request-state is-error">{detailError}</div> : null}
+        {!selectedSolution && !detailError ? (
+          <div className="leaderboard-empty-state">Select a solution from the leaderboard to view its details.</div>
+        ) : null}
+
+        {selectedSolution ? (
+          <>
+            <TabList value={selectedTab} onChange={setSelectedTab} layout="fill" hasDivider>
+              {detailTabs.map(([value, label]) => <Tab key={value} value={value} label={label} />)}
+            </TabList>
+            <div className="solution-detail-content">
+              <SolutionDetailTab tab={selectedTab} detail={selectedSolution} />
+            </div>
+          </>
+        ) : null}
+      </section>
+    </section>
+  );
+}
+
+function SolutionDetailTab({ tab, detail }) {
+  if (tab === "summary") {
+    return (
+      <div className="solution-detail-grid">
+        <DetailCard title="Summary">
+          <MetadataList>
+            <MetadataListItem label="Solution ID">{detail.solutionId}</MetadataListItem>
+            <MetadataListItem label="Solution name">{detail.solution.name}</MetadataListItem>
+            <MetadataListItem label="Scenario">{detail.scenarioId}</MetadataListItem>
+            <MetadataListItem label="Submitted by">{detail.identity.submittedBy}</MetadataListItem>
+            <MetadataListItem label="Submitted at">{detail.identity.createdAt}</MetadataListItem>
+          </MetadataList>
+        </DetailCard>
+        <DetailCard title="Official Results">
+          <MetadataList>
+            <MetadataListItem label="Official rank">{detail.officialResults.rank ?? "—"}</MetadataListItem>
+            <MetadataListItem label="Official score"><strong className="official-score-value">{detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
+            <MetadataListItem label="Final distance">{detail.officialResults.finalDistance.toFixed(4)} km</MetadataListItem>
+            <MetadataListItem label="Total Delta-V">{detail.officialResults.totalDeltaV.toFixed(4)} km/s</MetadataListItem>
+            <MetadataListItem label="Total time">{detail.officialResults.totalTime.toFixed(2)} s</MetadataListItem>
+            <MetadataListItem label="Burn count">{detail.officialResults.burnCount}</MetadataListItem>
+          </MetadataList>
+        </DetailCard>
+      </div>
+    );
+  }
+
+  if (tab === "optimization") {
+    if (!detail.optimization) return <div className="detail-empty">This manual solution has no optimization metadata.</div>;
+    return (
+      <DetailCard title="Optimization Setup">
+        <MetadataList>
+          <MetadataListItem label="Method">{detail.optimization.method.name}</MetadataListItem>
+          <MetadataListItem label="Implementation">{detail.optimization.method.implementation ?? "—"}</MetadataListItem>
+          <MetadataListItem label="Objective function">{detail.optimization.objectiveFunction.name}</MetadataListItem>
+          <MetadataListItem label="Objective sense">{detail.optimization.objectiveFunction.sense}</MetadataListItem>
+          <MetadataListItem label="Objective value">{detail.optimization.report?.objectiveValue ?? "—"}</MetadataListItem>
+          <MetadataListItem label="Optimizer success">{String(detail.optimization.report?.success ?? "—")}</MetadataListItem>
+          <MetadataListItem label="Iterations">{detail.optimization.report?.iterations ?? "—"}</MetadataListItem>
+        </MetadataList>
+        <p className="score-separation-note">Optimizer objective value is metadata and is not the official score.</p>
+      </DetailCard>
+    );
+  }
+
+  if (tab === "constraints") {
+    return (
+      <DetailCard title="Constraints">
+        <div className="constraint-list">
+          {detail.constraints.map((constraint) => (
+            <div key={constraint.name} className="constraint-item">
+              <span>{constraint.name}</span>
+              <strong className={constraint.satisfied ? "is-passed" : "is-failed"}>{constraint.satisfied ? "Passed" : "Failed"}</strong>
+              <small>{constraint.value} {constraint.operator} {constraint.limit}</small>
+            </div>
+          ))}
+        </div>
+      </DetailCard>
+    );
+  }
+
+  const variables = tab === "initial" ? detail.optimization?.initialGuess : detail.finalDecisionVariables;
+  if (!variables) return <div className="detail-empty">No initial guess was submitted.</div>;
+  return <DecisionVariables variables={variables} title={tab === "initial" ? "Initial Guess" : "Final Decision Variables"} />;
+}
+
+function DecisionVariables({ variables, title }) {
+  return (
+    <DetailCard title={title}>
+      <div className="decision-summary"><span>Initial wait</span><strong>{variables.tWait} s</strong><span>Final coast</span><strong>{variables.finalCoastTime} s</strong></div>
+      <div className="burn-list">
+        {variables.burns.map((burn, index) => (
+          <div key={burn.index ?? index} className="burn-card">
+            <strong>Burn {burn.index ?? index + 1}</strong>
+            <span>ΔV X: {burn.deltaV[0]} km/s</span>
+            <span>ΔV Y: {burn.deltaV[1]} km/s</span>
+            <span>ΔV Z: {burn.deltaV[2]} km/s</span>
+            {burn.timeToNextBurn != null ? <span>Next burn: {burn.timeToNextBurn} s</span> : null}
+          </div>
+        ))}
+      </div>
+    </DetailCard>
+  );
+}
+
+function DetailCard({ title, children }) {
+  return <section className="solution-detail-card"><h3>{title}</h3>{children}</section>;
+}

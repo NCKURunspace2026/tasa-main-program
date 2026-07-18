@@ -1,0 +1,6 @@
+/* Shared page shell styles. Page-specific styles stay with the page that owns them. */
+
+.page {
+  width: 100%;
+  min-width: 0;
+}

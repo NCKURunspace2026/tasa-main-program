@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "scenarioId": "SC-001",
+  "scenarioCode": "small-challenge-v1",
+  "name": "小試身手 v1",
+  "description": "ChaserB performs one or more impulsive maneuvers to intercept TargetA within 5 km.",
+  "status": "draft",
+  "scenarioVersion": 1,
+  "timeSystem": "UTCGregorian",
+  "epoch": "26 Jan 2026 13:00:00.000",
+  "centralBody": "Earth",
+  "coordinateSystem": "EarthMJ2000Eq",
+  "units": { "position": "km", "velocity": "km/s", "deltaV": "km/s", "time": "s", "distance": "km" },
+  "spacecraft": {
+    "target": { "name": "TargetA", "role": "target", "initialState": { "position": [8457.233587073177, 3078.181289931011, 0.0], "velocity": [-1.864506222331501, 5.122688744288453, 3.817147432373025] } },
+    "chaser": { "name": "ChaserB", "role": "chaser", "initialState": { "position": [7047.694611613806, 2565.151196602205, 0.00009065414689614744], "velocity": [-2.042464377523507, 5.611624308104965, 4.181475508067259] } }
+  },
+  "forceModel": { "centralBody": "Earth", "gravity": { "type": "spherical-harmonic", "degree": 2, "order": 0 }, "pointMasses": [], "drag": { "enabled": false, "model": null }, "solarRadiationPressure": { "enabled": false }, "relativisticCorrection": { "enabled": false } },
+  "mission": { "type": "interception", "controlledSpacecraft": "ChaserB", "targetSpacecraft": "TargetA", "maneuverModel": "instantaneous-impulsive", "requiresPositionMatch": true, "requiresVelocityMatch": false, "decisionVariableStructure": { "tWait": true, "dynamicBurnCount": true, "timeBetweenBurns": true, "finalCoastTime": true } },
+  "referenceValues": { "targetOrbitalPeriod": 8497.178560498533, "maximumMissionTime": 33988.71424199413 },
+  "constraints": { "minimumBurnCount": 1, "maximumBurnCount": 5, "maximumDeltaVPerBurn": 1.5, "minimumBurnSeparation": 100.0, "maximumMissionTime": 33988.71424199413, "interceptionDistance": 5.0, "nonNegativeTimes": true },
+  "officialEvaluation": { "propagateBothSpacecraft": true, "requiredMetrics": ["finalDistance", "minimumDistance", "closestApproachTime", "firstEntryTime", "totalDeltaV", "totalMissionTime", "burnCount", "burnMagnitudes"], "leaderboardEligibility": { "requiresPhysicalValidation": true, "requiresAllConstraintsSatisfied": true, "requiresValidationStatus": "validated" } },
+  "officialScore": { "status": "draft", "productionApproved": false, "direction": "maximize", "notes": ["Server calculates the score after production approval.", "Client-provided scores are ignored.", "Optimizer objectiveValue is not an official score."] }
+}

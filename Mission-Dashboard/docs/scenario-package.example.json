@@ -1,0 +1,34 @@
+{
+  "scenarioId": "SC-004",
+  "name": "Earth-Moon Transfer",
+  "description": "Example Scenario Package for validating Server-side publication.",
+  "definition": {
+    "schemaVersion": "1.0",
+    "referenceFrame": "EarthMJ2000Eq",
+    "units": {
+      "distance": "km",
+      "time": "s",
+      "velocity": "km/s"
+    },
+    "chaserInitialState": {
+      "epochUtc": "2026-01-01T00:00:00Z",
+      "positionKm": [7000, 0, 0],
+      "velocityKmPerS": [0, 7.546, 0]
+    },
+    "targetInitialState": {
+      "epochUtc": "2026-01-01T00:00:00Z",
+      "positionKm": [7100, 0, 0],
+      "velocityKmPerS": [0, 7.493, 0]
+    },
+    "mission": {
+      "type": "transfer",
+      "target": "Moon"
+    },
+    "constraints": {
+      "maximumBurnCount": 10,
+      "maximumTotalDeltaV": 1.5,
+      "maximumMissionTime": 21600,
+      "maximumFinalDistance": 5
+    }
+  }
+}

@@ -1,0 +1,446 @@
+/* ========================================
+   Overview page
+======================================== */
+
+.overview-page {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+}
+
+/* ========================================
+   Scenario selector
+======================================== */
+
+.overview-scenario-field {
+  width: min(100%, 400px);
+  flex: 0 0 400px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+.overview-scenario-field label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.overview-scenario-field select {
+  width: 100%;
+  min-height: 44px;
+
+  padding: 0 56px 0 14px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background-color: var(--surface);
+  color: var(--text-primary);
+
+  font: inherit;
+
+  cursor: pointer;
+}
+
+.overview-scenario-field select:hover {
+  border-color: rgba(120, 183, 242, 0.65);
+}
+
+.overview-scenario-field select:focus-visible {
+  outline: 2px solid #78b7f2;
+  outline-offset: 2px;
+}
+
+/* ========================================
+   Primary layout
+======================================== */
+
+.overview-primary-layout {
+  min-width: 0;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 2fr)
+    minmax(320px, 1fr);
+
+  align-items: stretch;
+
+  gap: 20px;
+}
+
+/* ========================================
+   Shared panels
+======================================== */
+
+.overview-panel {
+  min-width: 0;
+  min-height: 0;
+
+  padding: 20px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  background: var(--surface);
+
+  overflow: hidden;
+}
+
+.overview-panel-header {
+  min-width: 0;
+  margin-bottom: 16px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.overview-panel-header h2 {
+  margin: 0;
+
+  color: var(--text-primary);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.overview-panel-eyebrow {
+  margin: 0 0 6px;
+
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.overview-active-status {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 8px;
+
+  color: #4ade80;
+  font-size: 14px;
+}
+
+.overview-active-dot {
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+
+  background: #4ade80;
+
+  box-shadow:
+    0 0 8px rgba(74, 222, 128, 0.5);
+}
+
+/* ========================================
+   GMAT trajectory image
+======================================== */
+
+.trajectory-overview-panel {
+  min-height: 500px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.trajectory-image-container {
+  min-width: 0;
+  min-height: 0;
+
+  flex: 1;
+
+  display: flex;
+
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+
+  background: rgba(3, 11, 22, 0.3);
+
+  overflow: hidden;
+}
+
+.trajectory-image {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+
+  display: block;
+
+  object-fit: contain;
+
+  background: #030b16;
+}
+
+.trajectory-image-placeholder {
+  width: 100%;
+  min-height: 400px;
+
+  padding: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(59, 130, 246, 0.08),
+      transparent 34%
+    ),
+    linear-gradient(
+      rgba(148, 163, 184, 0.025) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.025) 1px,
+      transparent 1px
+    );
+
+  background-size:
+    auto,
+    36px 36px,
+    36px 36px;
+
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.trajectory-placeholder-icon {
+  width: 64px;
+  height: 64px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(120, 183, 242, 0.28);
+  border-radius: 16px;
+
+  background: rgba(59, 130, 246, 0.08);
+
+  color: #78b7f2;
+}
+
+.trajectory-placeholder-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.trajectory-image-placeholder h3 {
+  margin: 18px 0 0;
+
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.trajectory-image-placeholder p {
+  max-width: 440px;
+  margin: 10px 0 0;
+
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.trajectory-image-placeholder > span {
+  margin-top: 8px;
+
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 12px;
+}
+
+/* ========================================
+   Mission summary
+======================================== */
+
+.mission-summary-panel {
+  min-height: 500px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.mission-summary-content {
+  min-width: 0;
+  min-height: 0;
+
+  flex: 1;
+
+  padding: 16px;
+
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+
+  background: rgba(3, 11, 22, 0.24);
+
+  overflow: auto;
+}
+
+.overview-summary-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.overview-metadata-label {
+  min-width: 0;
+
+  display: inline-flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+.overview-metadata-icon {
+  width: 28px;
+  height: 28px;
+
+  flex: 0 0 28px;
+
+  display: grid;
+  place-items: center;
+
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.overview-metadata-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.overview-highlight-value {
+  color: #4ade80;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.overview-validation-status {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 8px;
+
+  color: #4ade80;
+}
+
+.overview-validation-dot {
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+
+  background: #4ade80;
+}
+
+/* ========================================
+   Recent solutions
+======================================== */
+
+.recent-solutions-panel {
+  min-height: 250px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-solutions-count {
+  padding: 6px 10px;
+
+  border: 1px solid var(--border);
+  border-radius: 999px;
+
+  color: var(--text-secondary);
+  font-size: 13px;
+
+  white-space: nowrap;
+}
+
+.recent-solutions-table {
+  width: 100%;
+  min-width: 0;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/*
+  Astryx Table 內容不強制縮成過窄欄位。
+  當畫面不足時，使用水平捲動。
+*/
+.recent-solutions-table
+  .astryx-table {
+  min-width: 860px;
+}
+
+/*
+  避免儲存格文字被換成多行，
+  數值欄位維持一致高度。
+*/
+.recent-solutions-table th,
+.recent-solutions-table td {
+  white-space: nowrap;
+}
+
+.recent-solutions-table tbody tr,
+.overview-solution-row {
+  cursor: pointer;
+}
+
+.recent-solutions-table tbody tr:focus-visible,
+.overview-solution-row:focus-visible {
+  outline: 2px solid #78b7f2;
+  outline-offset: -2px;
+}
+
+/* ========================================
+   Responsive layout
+======================================== */
+
+@media (max-width: 1200px) {
+  .overview-primary-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .trajectory-overview-panel,
+  .mission-summary-panel {
+    min-height: 480px;
+  }
+}
+
+@media (max-width: 760px) {
+  .overview-panel {
+    padding: 14px;
+  }
+
+  .overview-scenario-field {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .trajectory-image,
+  .trajectory-image-placeholder {
+    min-height: 320px;
+  }
+
+  .mission-summary-panel {
+    min-height: 420px;
+  }
+}
