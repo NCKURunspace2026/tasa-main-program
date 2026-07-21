@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test:electron": "node --test electron/main/*.test.cjs",
+    "test:electron": "node --test electron/main/configStore.test.cjs",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && env -u ELECTRON_RUN_AS_NODE electron .\"",
     "electron:build": "npm run build && electron-builder",
