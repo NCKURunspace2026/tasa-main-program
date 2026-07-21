@@ -5,7 +5,7 @@ backend_dir="$(cd "$(dirname "$0")/.." && pwd)"
 cache_dir="${TMPDIR:-/private/tmp}/mission-dashboard-pyinstaller"
 
 cd "$backend_dir"
-PYINSTALLER_CONFIG_DIR="$cache_dir" .venv/bin/pyinstaller \
+PYINSTALLER_CONFIG_DIR="$cache_dir" /usr/bin/arch -arm64 .venv/bin/python -m PyInstaller \
   --noconfirm \
   --clean \
   --onedir \
