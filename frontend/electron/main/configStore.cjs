@@ -3,14 +3,18 @@ const path = require("node:path");
 
 function resolveGmatInstallation(selectedPath) {
   const normalized = path.resolve(selectedPath);
-  const candidates = [
-    path.join(normalized, "bin", "GmatConsole"),
-    path.join(normalized, "GmatConsole"),
-    path.join(path.dirname(normalized), "bin", "GmatConsole"),
+  const executableNames = ["GmatConsole", "GmatConsole.exe"];
+  const candidateDirectories = [
+    path.join(normalized, "bin"),
+    normalized,
+    path.join(path.dirname(normalized), "bin"),
   ];
+  const candidates = candidateDirectories.flatMap((directory) =>
+    executableNames.map((executableName) => path.join(directory, executableName)),
+  );
   const executablePath = candidates.find((candidate) => fs.existsSync(candidate));
   if (!executablePath) {
-    throw new Error("This folder does not contain bin/GmatConsole. Select the GMAT installation folder or its api folder.");
+    throw new Error("This folder does not contain bin/GmatConsole or bin/GmatConsole.exe. Select the GMAT installation folder or its api folder.");
   }
   return { gmatInstallationPath: normalized, executablePath };
 }

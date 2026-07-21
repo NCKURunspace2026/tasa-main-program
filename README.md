@@ -134,3 +134,11 @@ npm run electron:build:mac
 ```
 
 App 不再捆綁 FastAPI/SQLite sidecar，因此安裝包只包含 UI、Electron 與 GMAT 執行整合。輸出為 `frontend/dist/Mission-Dashboard-<version>-arm64.dmg`；目前為 ad-hoc signing，尚未 notarize。
+
+Windows x64 版本由 GitHub Actions 的 Windows Runner 原生建置：
+
+```text
+Mission-Dashboard-<version>-windows-x64.exe
+```
+
+Windows 版會辨識 GMAT 安裝目錄內的 `bin/GmatConsole.exe`。目前安裝器尚未購買程式碼簽章憑證，因此 Windows SmartScreen 可能在第一次啟動時顯示「未知的發行者」；請只從本專案 GitHub Release 下載並核對同名 `.sha256.txt`。
