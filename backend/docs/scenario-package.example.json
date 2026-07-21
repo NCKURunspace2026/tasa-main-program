@@ -1,0 +1,51 @@
+{
+  "scenarioId": "SC-004",
+  "name": "Rendezvous Challenge",
+  "description": "Two-spacecraft rendezvous example.",
+  "scenarioJson": {
+    "schemaVersion": 1,
+    "epoch": {
+      "value": "2026-08-29T05:00:00Z",
+      "timeSystem": "UTC"
+    },
+    "coordinateSystem": "EarthMJ2000Eq",
+    "spacecraft": {
+      "target": {
+        "stateType": "Cartesian",
+        "positionKm": [7000, 0, 0],
+        "velocityKmPerSec": [0, 7.546, 0]
+      },
+      "chaser": {
+        "stateType": "Cartesian",
+        "positionKm": [6900, 0, 0],
+        "velocityKmPerSec": [0, 7.6, 0]
+      }
+    },
+    "forceModel": {
+      "centralBody": "Earth",
+      "gravityField": { "enabled": true, "degree": 4, "order": 4 }
+    },
+    "propagator": {
+      "integrator": "RungeKutta89",
+      "initialStepSec": 1,
+      "maxStepSec": 1,
+      "minStepSec": 0.001,
+      "accuracy": 1e-12
+    },
+    "validation": {
+      "maximumSimulationTimeSec": 20000,
+      "requiredFinalDistanceKm": 5
+    },
+    "scoreConfig": {
+      "distanceReferenceKm": 5,
+      "distanceDecayKm": 100,
+      "timeReferenceSec": 5000,
+      "timeSlope": 0.001,
+      "deltaVReferenceKmPerSec": 0.5,
+      "deltaVSlope": 5,
+      "distanceWeight": 50,
+      "timeWeight": 25,
+      "deltaVWeight": 25
+    }
+  }
+}

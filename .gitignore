@@ -1,0 +1,11 @@
+frontend/dist/
+frontend/node_modules/
+backend/.venv/
+backend/data/*.db
+backend/build/
+backend/dist/
+backend/*.spec
+__pycache__/
+.pytest_cache/
+.playwright-mcp/
+output/

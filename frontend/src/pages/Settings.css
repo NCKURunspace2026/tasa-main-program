@@ -1,0 +1,295 @@
+.settings-page {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.settings-navigation,
+.settings-group {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-navigation {
+  padding: 14px;
+  position: sticky;
+  top: 20px;
+}
+
+.settings-navigation-header {
+  padding: 5px 7px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-navigation-header > span {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.settings-navigation-header small,
+.settings-row-label small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-navigation-list {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.settings-navigation-item {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-navigation-item:hover { background: rgba(59, 130, 246, 0.05); }
+
+.settings-navigation-item.is-active {
+  border-color: rgba(120, 183, 242, 0.28);
+  background: rgba(59, 130, 246, 0.1);
+  color: #78b7f2;
+}
+
+.settings-navigation-text strong { font-size: 14px; }
+
+.settings-content {
+  width: 100%;
+  max-width: 920px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-section-header { margin-bottom: 16px; }
+
+.settings-section-header p {
+  margin: 0 0 6px;
+  color: #78b7f2;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-section-header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 26px;
+}
+
+.settings-section-header > span {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.settings-group { overflow: hidden; }
+
+.settings-row {
+  min-width: 0;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.settings-row-label strong {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.settings-row-control { min-width: 0; }
+
+.settings-page .settings-row input:not([type="checkbox"]),
+.settings-page .settings-row textarea,
+.settings-page .settings-row select {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(3, 11, 22, 0.3);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.runtime-mode-current {
+  margin: 18px 20px 0;
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+}
+
+.runtime-mode-badge {
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.runtime-mode-server { color: #4ade80; }
+.runtime-mode-client { color: #60a5fa; }
+
+.scenario-limit-heading {
+  padding: 15px 20px 8px;
+  color: #78b7f2;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scenario-limits-form > .settings-primary-button {
+  margin: 16px 20px;
+}
+
+.scenario-admin-divider {
+  margin-top: 8px;
+  padding: 18px 20px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-row textarea { min-height: 100px; resize: vertical; }
+.scenario-definition-input { min-height: 260px !important; font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important; }
+
+.settings-page .settings-row input:focus,
+.settings-page .settings-row textarea:focus {
+  border-color: rgba(120, 183, 242, 0.68);
+  outline: 2px solid rgba(120, 183, 242, 0.14);
+  outline-offset: 1px;
+}
+
+.settings-page .settings-row input[type="number"] { max-width: 180px; }
+
+.settings-input-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.settings-primary-button,
+.settings-secondary-button {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-primary-button {
+  border: 1px solid #78b7f2;
+  background: #78b7f2;
+  color: #07111f;
+}
+
+.settings-secondary-button {
+  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.05);
+  color: var(--text-primary);
+}
+
+.settings-primary-button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.scenario-form-actions,
+.scenario-create-form > .settings-primary-button,
+.settings-group-content > .settings-primary-button,
+.settings-file-button {
+  margin: 16px 20px;
+}
+
+.scenario-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.settings-file-button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.scenario-admin-list { border-top: 1px solid var(--border); }
+
+.scenario-admin-list article {
+  padding: 13px 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.scenario-admin-list article > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scenario-admin-list strong { color: #78b7f2; }
+.scenario-admin-list span { color: var(--text-secondary); }
+
+.settings-message {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(120, 183, 242, 0.2);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 920px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-navigation { position: static; }
+  .settings-navigation-list { flex-direction: row; overflow-x: auto; }
+  .settings-navigation-item { width: auto; flex: 0 0 auto; }
+  .settings-row { grid-template-columns: 1fr; gap: 10px; }
+}
+
+@media (max-width: 720px) {
+  .settings-input-action { grid-template-columns: 1fr; }
+  .system-status-grid { grid-template-columns: 1fr; }
+}

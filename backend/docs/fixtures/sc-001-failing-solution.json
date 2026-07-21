@@ -1,0 +1,14 @@
+{
+  "scenarioId": "SC-001",
+  "name": "Format-valid physical failure",
+  "expectedLocalResult": "failed",
+  "decisionVariables": {
+    "tWait": 0.0,
+    "burns": [
+      {
+        "deltaV": [1.0, 0.0, 0.0]
+      }
+    ],
+    "finalCoastTime": 100.0
+  }
+}
