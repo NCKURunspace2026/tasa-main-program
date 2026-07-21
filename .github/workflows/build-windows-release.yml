@@ -1,6 +1,9 @@
 name: Build Windows Release
 
 on:
+  push:
+    branches:
+      - "release/**"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -55,7 +58,12 @@ jobs:
           $installer = Get-ChildItem "dist/Mission-Dashboard-*-windows-x64.exe" | Select-Object -First 1
           $checksum = Get-ChildItem "dist/Mission-Dashboard-*-windows-x64.sha256.txt" | Select-Object -First 1
           if (-not $installer -or -not $checksum) { throw "Windows release files are incomplete." }
-          gh release upload "${{ inputs.release_tag }}" `
+          $releaseTag = "${{ inputs.release_tag }}"
+          if (-not $releaseTag) {
+            $version = node -p "require('./package.json').version"
+            $releaseTag = "v$version"
+          }
+          gh release upload $releaseTag `
             $installer.FullName `
             $checksum.FullName `
             --clobber `
