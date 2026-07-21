@@ -1,1 +1,1 @@
-"""Database access boundaries for the central server."""
+"""Database access boundaries for the FastAPI Cloud backend."""

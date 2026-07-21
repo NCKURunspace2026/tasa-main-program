@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.leaderboard import router as leaderboard_router
@@ -9,7 +10,7 @@ from .api.internal_validation import router as internal_validation_router
 from .api.scenarios import router as scenarios_router
 from .api.solutions import router as solutions_router
 from .api.submissions import router as submissions_router
-from .db import initialize_database
+from .db import get_db, initialize_database
 from .services.worker_status_service import get_worker_status
 
 
@@ -48,9 +49,10 @@ app.include_router(internal_validation_router)
 
 
 @app.get("/health")
-def health_check():
+def health_check(session: Session = Depends(get_db)):
     return {
         "status": "ok",
-        "database": "ok",
-        **get_worker_status(),
+        "database": "neon" if session.bind.dialect.name == "postgresql" else "sqlite-development",
+        "cloudBackend": "ready",
+        **get_worker_status(session),
     }

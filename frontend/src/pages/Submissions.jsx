@@ -21,7 +21,7 @@ const validationDefinitions = [
   },
   {
     id: "gmat",
-    title: "Local GMAT validation",
+    title: "GMAT validation",
     description:
       "The submitted trajectory is checked locally.",
   },
@@ -29,7 +29,7 @@ const validationDefinitions = [
     id: "result",
     title: "Validation result",
     description:
-      "The result is ready to upload to the central computer.",
+      "The official result is stored by FastAPI Cloud.",
   },
 ];
 
@@ -274,7 +274,7 @@ export default function Submissions({ onNavigate }) {
         status: result.status === "accepted" ? "queued" : "failed",
         currentStep: 4,
         message: result.status === "accepted"
-          ? `Local GMAT passed in ${localValidationSeconds.toFixed(2)} s via ${localResult.provider}. ${result.submissionId} is waiting for central GMAT.`
+          ? `Local GMAT passed in ${localValidationSeconds.toFixed(2)} s via ${localResult.provider}. ${result.submissionId} is waiting for official validation.`
           : result.message ?? "Submission was not accepted.",
         checkedAt: new Date(),
         submissionId: result.submissionId,
@@ -289,7 +289,7 @@ export default function Submissions({ onNavigate }) {
         setValidationState({
           status: "passed",
           currentStep: 4,
-          message: `Central GMAT passed. Official minimum distance: ${officialResult.officialResults.minimumDistanceKm.toFixed(6)} km.`,
+          message: `Official GMAT passed. Minimum distance: ${officialResult.officialResults.minimumDistanceKm.toFixed(6)} km.`,
           checkedAt: new Date(),
           submissionId: result.submissionId,
           solutionId: officialResult.solutionId,
@@ -300,7 +300,7 @@ export default function Submissions({ onNavigate }) {
       setValidationState({
         status: "failed",
         currentStep: 4,
-        message: officialResult.errorMessage ?? "Central GMAT validation failed.",
+        message: officialResult.errorMessage ?? "Official GMAT validation failed.",
         checkedAt: new Date(),
         submissionId: result.submissionId,
         solutionId: officialResult.solutionId,
@@ -330,12 +330,12 @@ export default function Submissions({ onNavigate }) {
         status: "queued",
         currentStep: 4,
         message: result.status === "validating"
-          ? `Central GMAT is validating ${submissionId}.`
-          : `${submissionId} is queued for central GMAT validation.`,
+          ? `The official validation computer is checking ${submissionId} with GMAT.`
+          : `${submissionId} is queued for official GMAT validation.`,
       }));
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    throw new Error("Central GMAT did not finish within 120 seconds.");
+    throw new Error("Official GMAT did not finish within 120 seconds.");
   }
 
   function resetValidation() {
@@ -350,7 +350,7 @@ export default function Submissions({ onNavigate }) {
     <section className="submissions-page">
       <PageHeader
         title="Submissions"
-        description="Enter the trajectory decision variables. The application runs local GMAT before uploading to the central computer."
+        description="Enter the trajectory decision variables. Local GMAT checks the input before FastAPI Cloud queues the official GMAT validation."
       >
         <div className="submission-scenario-field">
           <label htmlFor="submission-scenario">
@@ -890,7 +890,7 @@ function getValidationTitle(status) {
   const titles = {
     idle: "Ready for submission",
     running: "Validation in progress",
-    queued: "Waiting for central GMAT",
+    queued: "Waiting for official GMAT",
     passed: "Validation passed",
     failed: "Validation failed",
   };

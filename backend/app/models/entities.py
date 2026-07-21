@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -57,5 +57,21 @@ class Submission(Base):
     penalty_score: Mapped[Optional[float]] = mapped_column(Float)
     total_score: Mapped[Optional[float]] = mapped_column(Float)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+    claimed_by_worker_id: Mapped[Optional[str]] = mapped_column(String(96), index=True)
+    claim_token: Mapped[Optional[str]] = mapped_column(String(64))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class ValidationWorker(Base):
+    __tablename__ = "validation_workers"
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(80))
+    gmat_configured: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )

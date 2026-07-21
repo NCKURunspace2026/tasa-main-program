@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base, Scenario
@@ -12,9 +12,25 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = BACKEND_ROOT / "data" / "main.db"
 DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+def _normalize_database_url(value: str) -> str:
+    # Neon supplies a standard postgresql:// URL. Select SQLAlchemy's psycopg 3
+    # driver explicitly so Cloud does not depend on the legacy psycopg2 package.
+    if value.startswith("postgres://"):
+        return value.replace("postgres://", "postgresql+psycopg://", 1)
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
+    return value
+
+
+DATABASE_URL = _normalize_database_url(
+    os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+)
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -25,6 +41,7 @@ def get_db():
 
 def initialize_database() -> None:
     Base.metadata.create_all(engine)
+    _add_queue_lease_columns_for_existing_database()
     with SessionLocal.begin() as session:
         definition_path = BACKEND_ROOT / "docs" / "scenarios" / "small-challenge-v1.json"
         definition = json.loads(definition_path.read_text())
@@ -60,6 +77,29 @@ def initialize_database() -> None:
                 propagator["maxStepSec"] = 1.0
                 scenario_definition["propagator"] = propagator
                 scenario.scenario_json = scenario_definition
+
+
+def _add_queue_lease_columns_for_existing_database() -> None:
+    """Small forward-only migration for pre-Neon development databases.
+
+    A fresh Neon database is created from SQLAlchemy metadata. This keeps an
+    existing local SQLite database usable without retaining it as production
+    state. A full migration framework can replace this once the schema grows.
+    """
+    existing = {column["name"] for column in inspect(engine).get_columns("submissions")}
+    additions = {
+        "claimed_at": "TIMESTAMP",
+        "lease_expires_at": "TIMESTAMP",
+        "claimed_by_worker_id": "VARCHAR(96)",
+        "claim_token": "VARCHAR(64)",
+        "attempt_count": "INTEGER NOT NULL DEFAULT 0",
+    }
+    with engine.begin() as connection:
+        for name, data_type in additions.items():
+            if name not in existing:
+                connection.execute(text(
+                    f"ALTER TABLE submissions ADD COLUMN {name} {data_type}"
+                ))
 
 
 def reset_database(session: Session) -> None:

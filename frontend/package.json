@@ -1,5 +1,7 @@
 {
   "name": "testing-dashboard",
+  "description": "Electron dashboard for cloud-backed orbital mission validation with GMAT.",
+  "author": "NCKU Runspace 2026",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,8 +12,6 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && env -u ELECTRON_RUN_AS_NODE electron .\"",
-    "electron:server": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && env -u ELECTRON_RUN_AS_NODE electron . --server\"",
-    "electron:client": "env -u ELECTRON_RUN_AS_NODE electron . --client",
     "electron:build": "npm run build && electron-builder",
     "electron:build:mac": "bash scripts/build_macos_release.sh"
   },
@@ -41,12 +41,6 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "../backend/dist/mission-dashboard-backend",
-        "to": "backend-sidecar"
-      }
     ],
     "mac": {
       "target": "dmg"

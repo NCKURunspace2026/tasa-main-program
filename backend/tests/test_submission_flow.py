@@ -1,21 +1,12 @@
-import os
-import tempfile
-from pathlib import Path
-
 from fastapi.testclient import TestClient
-
-TEST_DATABASE_PATH = Path(tempfile.gettempdir()) / "mission_dashboard_v2_tests.db"
-TEST_DATABASE_PATH.unlink(missing_ok=True)
-os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DATABASE_PATH}"
-os.environ["MISSION_DASHBOARD_WORKER_TOKEN"] = "test-worker-token"
 
 from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
 
 WORKER_HEADERS = {
-    "X-Device-Role": "server",
     "X-Worker-Token": "test-worker-token",
 }
+WORKER_ID = "test-central-gmat-worker"
 
 
 def submission_payload():
@@ -197,6 +188,7 @@ def test_central_worker_claims_scores_and_publishes_passed_submission():
         claimed = client.post(
             "/api/internal/validation/next",
             headers=WORKER_HEADERS,
+            json={"workerId": WORKER_ID},
         ).json()["item"]
         assert claimed["submissionId"] == accepted["submissionId"]
         assert claimed["decisionVariables"]["burns"][0]["deltaV"] == [0.1, 0.2, 0.3]
@@ -206,7 +198,9 @@ def test_central_worker_claims_scores_and_publishes_passed_submission():
             headers=WORKER_HEADERS,
             json={
                 "status": "passed",
-                "provider": "central-gmat-console",
+                "workerId": WORKER_ID,
+                "claimToken": claimed["claimToken"],
+                "provider": "official-gmat-console",
                 "minimumDistanceKm": 4.8,
                 "missionTimeSec": 5000,
                 "totalDeltaVKmPerSec": 0.374,
@@ -227,7 +221,11 @@ def test_worker_heartbeat_controls_health_truthfully():
         heartbeat = client.post(
             "/api/internal/validation/heartbeat",
             headers=WORKER_HEADERS,
-            json={"provider": "central-gmat-console", "gmatConfigured": True},
+            json={
+                "workerId": WORKER_ID,
+                "provider": "official-gmat-console",
+                "gmatConfigured": True,
+            },
         )
         assert heartbeat.status_code == 200
         health = client.get("/health").json()

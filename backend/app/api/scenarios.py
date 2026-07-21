@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..schemas.scenario import ScenarioCreate, ScenarioParseRequest, ScenarioUpdate
+from ..security import require_worker_access
 from ..services.scenario_service import (
     ScenarioAlreadyExistsError,
     InvalidScenarioError,
@@ -41,13 +42,8 @@ def read_scenario(scenario_id: str, session: Session = Depends(get_db)):
 def post_scenario(
     payload: ScenarioCreate,
     session: Session = Depends(get_db),
-    device_role: str = Header(default="client", alias="X-Device-Role"),
+    _: None = Depends(require_worker_access),
 ):
-    if device_role != "server":
-        raise HTTPException(
-            status_code=403,
-            detail="Only a server device can create scenarios.",
-        )
     try:
         return create_scenario(session, payload)
     except ScenarioAlreadyExistsError as error:
@@ -61,13 +57,8 @@ def put_scenario(
     scenario_id: str,
     payload: ScenarioUpdate,
     session: Session = Depends(get_db),
-    device_role: str = Header(default="client", alias="X-Device-Role"),
+    _: None = Depends(require_worker_access),
 ):
-    if device_role != "server":
-        raise HTTPException(
-            status_code=403,
-            detail="Only a server device can modify scenarios.",
-        )
     try:
         updated = update_scenario(session, scenario_id, payload)
     except InvalidScenarioError as error:

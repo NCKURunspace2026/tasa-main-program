@@ -2,14 +2,14 @@
 set -euo pipefail
 
 frontend_dir="$(cd "$(dirname "$0")/.." && pwd)"
-project_dir="$(cd "$frontend_dir/.." && pwd)"
 version="$(node -p "require('$frontend_dir/package.json').version")"
 artifact="$frontend_dir/dist/Mission-Dashboard-${version}-arm64.dmg"
 
-"$project_dir/backend/scripts/build_sidecar_macos.sh"
 cd "$frontend_dir"
 npm run build
-npx electron-builder --mac --arm64
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --arm64 --dir
+codesign --force --deep --sign - "dist/mac-arm64/Mission Dashboard.app"
+codesign --verify --deep --strict "dist/mac-arm64/Mission Dashboard.app"
 hdiutil create \
   -volname "Mission Dashboard ${version}" \
   -srcfolder "dist/mac-arm64/Mission Dashboard.app" \

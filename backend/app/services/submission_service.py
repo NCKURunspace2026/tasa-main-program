@@ -44,7 +44,7 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         "solutionId": solution.id,
         "status": "accepted",
         "queueStatus": "pending",
-        "message": "Saved by the central server and queued for official GMAT validation.",
+        "message": "Saved by FastAPI Cloud and queued for official GMAT validation.",
     }
 
 

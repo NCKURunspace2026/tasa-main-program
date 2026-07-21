@@ -13,10 +13,8 @@ export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState(null);
 
   useEffect(() => {
-    const runtimeParams = new URLSearchParams(window.location.search);
     const fallbackRuntime = {
-      role: runtimeParams.get("desktopRole") === "server" ? "server" : "client",
-      localServerAddress: null,
+      role: "client",
     };
     window.missionDashboardDesktop?.getRuntimeConfig?.()
       .then(setRuntimeConfig)
@@ -101,7 +99,7 @@ function GmatFirstRunSetup({ onComplete }) {
         </div>
         {message ? <p className="first-run-message">{message}</p> : null}
         <button className="first-run-primary" type="submit">Save and continue</button>
-        <p className="first-run-help">The central Server address is configured separately in Settings → Connection.</p>
+        <p className="first-run-help">Submissions are sent to the configured FastAPI Cloud backend.</p>
       </form>
     </main>
   );

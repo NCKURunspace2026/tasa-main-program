@@ -1,47 +1,49 @@
 const API_BASE_STORAGE_KEY = "mission-dashboard-api-base-url";
 const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+  import.meta.env.VITE_API_BASE_URL ?? "https://missiondashboard.fastapicloud.dev/api";
 
 function getStoredApiBaseUrl() {
   if (typeof window === "undefined") return DEFAULT_API_BASE_URL;
-  const runtimeParams = new URLSearchParams(window.location.search);
-  const runtimeAddress = runtimeParams.get("serverAddress");
-  if (runtimeParams.get("desktopRole") === "server" && runtimeAddress) {
-    const runtimeApiBaseUrl = normalizeServerAddress(runtimeAddress);
-    window.localStorage.setItem(API_BASE_STORAGE_KEY, runtimeApiBaseUrl);
-    return runtimeApiBaseUrl;
+  const storedApiBaseUrl = window.localStorage.getItem(API_BASE_STORAGE_KEY);
+  const isRemovedLocalServer = import.meta.env.PROD && (
+    storedApiBaseUrl?.startsWith("http://127.0.0.1:8000")
+    || storedApiBaseUrl?.startsWith("http://localhost:8000")
+  );
+  if (!storedApiBaseUrl || isRemovedLocalServer) {
+    window.localStorage.setItem(API_BASE_STORAGE_KEY, DEFAULT_API_BASE_URL);
+    return DEFAULT_API_BASE_URL;
   }
-  return window.localStorage.getItem(API_BASE_STORAGE_KEY) ?? DEFAULT_API_BASE_URL;
+  return storedApiBaseUrl;
 }
 
-function normalizeServerAddress(serverAddress) {
-  const parsed = new URL(serverAddress.trim());
+function normalizeCloudAddress(cloudAddress) {
+  const parsed = new URL(cloudAddress.trim());
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Server address must use HTTP or HTTPS.");
+    throw new Error("Cloud address must use HTTP or HTTPS.");
   }
   const pathname = parsed.pathname.replace(/\/+$/, "");
   parsed.pathname = pathname.endsWith("/api") ? pathname : `${pathname}/api`;
   return parsed.toString().replace(/\/$/, "");
 }
 
-export function getServerAddress() {
+export function getCloudAddress() {
   return getStoredApiBaseUrl().replace(/\/api$/, "");
 }
 
-export function setServerAddress(serverAddress) {
-  const apiBaseUrl = normalizeServerAddress(serverAddress);
+export function setCloudAddress(cloudAddress) {
+  const apiBaseUrl = normalizeCloudAddress(cloudAddress);
   window.localStorage.setItem(API_BASE_STORAGE_KEY, apiBaseUrl);
   return apiBaseUrl.replace(/\/api$/, "");
 }
 
-export async function testServerConnection(serverAddress) {
-  const apiBaseUrl = normalizeServerAddress(serverAddress);
+export async function testCloudConnection(cloudAddress) {
+  const apiBaseUrl = normalizeCloudAddress(cloudAddress);
   const healthUrl = apiBaseUrl.replace(/\/api$/, "/health");
   const startedAt = performance.now();
   const response = await fetch(healthUrl);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status !== "ok") {
-    throw new Error("Server health check failed.");
+    throw new Error("FastAPI Cloud health check failed.");
   }
   return {
     latencyMs: Math.round(performance.now() - startedAt),
@@ -101,17 +103,22 @@ export function getScenarios() {
 }
 
 export function createScenario(scenario) {
-  return request("/scenarios", {
+  return adminRequest("/scenarios", {
     method: "POST",
-    headers: { "X-Device-Role": "server" },
     body: JSON.stringify(scenario),
   });
 }
 
 export function updateScenario(scenarioId, scenario) {
-  return request(`/scenarios/${scenarioId}`, {
+  return adminRequest(`/scenarios/${scenarioId}`, {
     method: "PUT",
-    headers: { "X-Device-Role": "server" },
     body: JSON.stringify(scenario),
   });
+}
+
+function adminRequest(path, options) {
+  if (!window.missionDashboardDesktop?.adminCloudRequest) {
+    throw new Error("Scenario administration requires the designated official validation computer.");
+  }
+  return window.missionDashboardDesktop.adminCloudRequest(path, options);
 }

@@ -5,21 +5,21 @@ import "./Settings.css";
 import PageHeader from "../components/PageHeader.jsx";
 import {
   createScenario,
-  getServerAddress,
+  getCloudAddress,
   getScenarios,
-  setServerAddress,
-  testServerConnection,
+  setCloudAddress,
+  testCloudConnection,
   updateScenario as updateScenarioRequest,
 } from "../services/api.js";
 
 const sections = [
   ["connection", "Connection"],
   ["validation", "Local GMAT"],
-  ["server", "Scenario Administration"],
+  ["administration", "Scenario Administration"],
 ];
 
 const defaultSettings = {
-  serverAddress: getServerAddress(),
+  cloudAddress: getCloudAddress(),
   gmatExecutablePath: "",
   validationTimeout: "120",
   keepTemporaryFiles: false,
@@ -55,8 +55,8 @@ function loadSettings() {
 }
 
 export default function Settings({ runtimeConfig }) {
-  const isServer = runtimeConfig?.role === "server";
-  const visibleSections = sections.filter(([id]) => id !== "server" || isServer);
+  const isWorker = runtimeConfig?.role === "worker";
+  const visibleSections = sections.filter(([id]) => id !== "administration" || isWorker);
   const [activeSection, setActiveSection] = useState("connection");
   const [settings, setSettings] = useState(loadSettings);
   const [message, setMessage] = useState("");
@@ -105,7 +105,7 @@ export default function Settings({ runtimeConfig }) {
 
   async function saveSettings() {
     try {
-      setServerAddress(settings.serverAddress);
+      setCloudAddress(settings.cloudAddress);
       window.localStorage.setItem("mission-dashboard-settings", JSON.stringify(settings));
       await window.missionDashboardDesktop?.saveGmatConfig?.({
         gmatInstallationPath: settings.gmatExecutablePath.trim(),
@@ -119,11 +119,11 @@ export default function Settings({ runtimeConfig }) {
   }
 
   async function testConnection() {
-    setMessage("Testing server connection…");
+    setMessage("Testing FastAPI Cloud connection…");
     try {
-      const result = await testServerConnection(settings.serverAddress);
+      const result = await testCloudConnection(settings.cloudAddress);
       setMessage(
-        `Server connected in ${result.latencyMs} ms. Central validation: ${result.validationWorker}${result.physicalValidation ? " (ready)" : ""}.`,
+        `Cloud connected in ${result.latencyMs} ms. Official validator: ${result.validationWorker}${result.physicalValidation ? " (ready)" : ""}.`,
       );
     } catch (error) {
       setMessage(error.message);
@@ -187,7 +187,7 @@ export default function Settings({ runtimeConfig }) {
         scenarioJson: JSON.stringify(data.scenarioJson ?? data.definition ?? {}, null, 2),
       });
       setMessage(`${file.name} loaded. Review it before publishing.`);
-      setActiveSection("server");
+      setActiveSection("administration");
     } catch {
       setMessage("Scenario package must be valid JSON.");
     }
@@ -244,7 +244,7 @@ export default function Settings({ runtimeConfig }) {
         item.scenarioId === updated.scenarioId ? updated : item
       )));
       setScenarioLimits(readScenarioLimits(updated.scenarioJson));
-      setMessage(`${updated.scenarioId} limits saved to the central Server.`);
+      setMessage(`${updated.scenarioId} limits saved to FastAPI Cloud.`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -256,7 +256,9 @@ export default function Settings({ runtimeConfig }) {
     <section className="settings-page">
       <PageHeader
         title="Settings"
-        description={`Running in ${isServer ? "Server" : "Client"} mode. Configure only the controls available to this role.`}
+        description={isWorker
+          ? "This designated computer runs official GMAT validation and Scenario Administration."
+          : "This application connects directly to the FastAPI Cloud backend."}
       />
 
       <div className="settings-layout">
@@ -282,17 +284,15 @@ export default function Settings({ runtimeConfig }) {
         <main className="settings-content">
           {activeSection === "connection" ? (
             <SettingsSection
-              title={isServer ? "Central Server" : "Cloud Relay"}
-              description={isServer
-                ? "This computer hosts the official scenarios, submissions and leaderboard data."
-                : "The Client reaches the fixed Central Server through this stateless Cloud relay."}
+              title="FastAPI Cloud"
+              description="All clients and the official validation computer use this public API. Persistent state is stored in Neon PostgreSQL."
             >
-              <SettingsRow label={isServer ? "Server address" : "Cloud relay address"}>
+              <SettingsRow label="Cloud backend address">
                 <input
-                  name="serverAddress"
-                  value={settings.serverAddress}
+                  name="cloudAddress"
+                  value={settings.cloudAddress}
                   onChange={updateSetting}
-                  placeholder={isServer ? "http://127.0.0.1:8000" : "https://cloud.example.com"}
+                  placeholder="https://missiondashboard.fastapicloud.dev"
                 />
               </SettingsRow>
               <div className="settings-inline-actions scenario-form-actions">
@@ -341,7 +341,7 @@ export default function Settings({ runtimeConfig }) {
             </SettingsSection>
           ) : null}
 
-          {activeSection === "server" ? (
+          {activeSection === "administration" ? (
             <SettingsSection
               title="Scenario Administration"
               description="Upload a package, review its fixed simulation environment, then publish it to clients."

@@ -14,14 +14,16 @@ class SubmissionStateError(ValueError):
     pass
 
 
-def claim_next_submission(session: Session) -> dict | None:
-    submission = submission_repository.claim_next_pending(session)
+def claim_next_submission(session: Session, worker_id: str) -> dict | None:
+    submission = submission_repository.claim_next_pending(session, worker_id)
     if submission is None:
         return None
     solution = session.get(Solution, submission.solution_id)
     scenario = scenario_repository.find_by_id(session, solution.scenario_id)
     return {
         "submissionId": submission.id,
+        "claimToken": submission.claim_token,
+        "leaseExpiresAt": submission.lease_expires_at,
         "solutionId": solution.id,
         "scenario": {
             "scenarioId": scenario.id,
@@ -44,8 +46,15 @@ def complete_submission(
         raise SubmissionStateError(
             f"Submission {submission_id} is {submission.status}, not validating."
         )
+    if (
+        submission.claimed_by_worker_id != result.workerId
+        or submission.claim_token != result.claimToken
+    ):
+        raise SubmissionStateError("The validation claim is missing, stale, or owned by another worker.")
 
     submission.validated_at = datetime.now(timezone.utc)
+    submission.lease_expires_at = None
+    submission.claim_token = None
     if result.status == "failed":
         submission.status = "failed"
         submission.error_message = result.errorMessage

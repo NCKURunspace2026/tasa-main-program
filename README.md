@@ -1,120 +1,136 @@
 # Mission Dashboard
 
-軌道競賽的 Electron + React Client 與 FastAPI 中央 Server。Client 使用本機 General Mission Analysis Tool (GMAT) 做提交前驗證；中央 Server 的 SQLite `main.db` 是唯一正式資料來源。
+軌道競賽的 Electron + React Client、FastAPI Cloud 正式後端與本機 General Mission Analysis Tool（GMAT）驗證系統。FastAPI Cloud 是唯一公開 Application Programming Interface（API），Neon PostgreSQL 是唯一正式資料來源；本機電腦不需要公開網域或連入 Port。
 
 ## 架構
 
-```text
-React UI → Electron IPC → Local GMAT
-    │                         │
-    └──── passed evidence ────┘
-                ↓
-        FastAPI Cloud Relay → Central FastAPI → Service → Repository → SQLite main.db
-                                      ↓
-                         Electron Server Validation Worker
-                                      ↓
-                              Central GMAT Console
-                                      ↓
-                              passed Leaderboard
+```mermaid
+flowchart LR
+    C[Electron Client] -->|POST Submission / GET Result| A[FastAPI Cloud]
+    A --> N[(Neon PostgreSQL)]
+    W[Designated GMAT Worker] -->|Heartbeat / Claim Job| A
+    W --> G[GMAT Console]
+    G --> W
+    W -->|POST Official Result| A
+    A --> L[Leaderboard]
 ```
 
-後端只保留三個正式實體：
+正式資料流：
 
-- `Scenario`：固定題目、物理模型、座標系、積分器、驗證與計分參數。
-- `Solution`：使用者名稱與 Decision Variables。
-- `Submission`：Client 驗證證據、中央 Queue 狀態與正式結果。
+1. Electron 使用本機 GMAT 做提交前物理驗證。
+2. FastAPI Cloud 在 Neon 的同一個 transaction 保存 `Solution` 與 `Submission`。
+3. 指定的本機 GMAT Worker 主動向 Cloud 領取任務，因此不需要 ngrok、Cloudflare、Port Forwarding 或 `CENTRAL_SERVER_URL`。
+4. Worker 執行 GMAT propagation 後，以 claim token 回傳結果。
+5. FastAPI Cloud 計分；Leaderboard 只查詢 `passed` Submission。
 
-Leaderboard 是 `passed` Submission 的查詢結果，不另建資料表。
+後端的正式實體為 `Scenario`、`Solution`、`Submission` 與 `ValidationWorker`。Queue 使用資料庫 row lock、180 秒 lease 與 claim token；Worker 中斷後，逾時任務可重新被領取，舊 Worker 不能覆寫新結果。
 
-中央 Worker 透過受 token 保護的 internal API claim `pending` Submission，執行中央 GMAT，再由 FastAPI 的 ScoreService 計算正式分數。Client 傳入的驗證數值不參與正式計分。
+## 部署狀態
 
-## 目前部署狀態
-
-| 區域 | 狀態 | 內容 |
+| 區域 | 實作 | 正式設定 |
 |---|---|---|
-| Client App | 已實作 | React、Electron IPC、本機 GMAT 預驗證、HTTP Client |
-| Central Server | 已實作於 Electron Server mode | FastAPI、Service、Repository、SQLite、Validation Worker、中央 GMAT、Leaderboard |
-| FastAPI Cloud Relay | 已實作並部署 | FastAPI Cloud App `715e07b4-5ec3-4e69-b95d-b25587cc736c`；無狀態 health check 與公開 API forwarding；不暴露 internal worker API |
+| Electron Client | React、手動輸入、本機 GMAT 預驗證、結果輪詢 | 預設連線至 FastAPI Cloud |
+| FastAPI Cloud | Scenario、Submission Queue、結果、計分、Leaderboard | <https://missiondashboard.fastapicloud.dev> |
+| Neon PostgreSQL | 所有正式持久化資料 | 需在 Cloud 設定 `DATABASE_URL` |
+| GMAT Worker | heartbeat、claim、GMAT、result | 需與 Cloud 共用 `MISSION_DASHBOARD_WORKER_TOKEN` |
 
-FastAPI Cloud 公開網址為 <https://missiondashboard.fastapicloud.dev>，平台已提供 HTTPS。目前 relay 已上線，但 `CENTRAL_SERVER_URL` 尚未設定，因此 `/health` 會回 `503`，Client、Cloud、中央 Server 的端到端連線尚未完成。正式上線仍需中央 Server 的安全公開入口、身分驗證與網路故障處理。
+介面把這台指定電腦稱為 **Official Validator（官方驗證電腦）**。
+`GMAT Worker` 只保留為後端技術名稱，不是一般使用者可以切換的 Mode。
+Queue 技術上支援多台 Validator，但正式賽事應只授權具有相同 GMAT 版本與
+驗證環境的受控電腦。
+
+`chowseegun.app` 目前不參與系統運作；日後若只想換成較好看的 API 網址，再另外綁定即可。
 
 ## 檔案結構
 
 ```text
-frontend/  React、Vite、Electron、本機 GMAT 驗證
-backend/   FastAPI、Service、Repository、SQLite、測試與情境文件
+frontend/  React、Vite、Electron、本機 GMAT 與官方 GMAT Worker
+backend/   FastAPI、SQLAlchemy、Neon/SQLite development adapter、測試與 Scenario
 ```
 
-根目錄只負責說明與工作區層級設定。前端與後端各自擁有依賴、測試及建置產物，避免跨層混放。
+`backend/cloud_relay/` 只保留舊命令相容入口，實際 Cloud 與本機開發都使用同一個 `app.main:app`，不再維護第二套 relay 邏輯。
 
-## 開發
+## 必要環境變數
+
+FastAPI Cloud：
+
+```text
+DATABASE_URL=postgresql://...neon.tech/...?...sslmode=require
+MISSION_DASHBOARD_WORKER_TOKEN=<至少 32 bytes 的隨機 secret>
+```
+
+`DATABASE_URL` 必須使用 Neon 的 pooled connection string。Electron Client 不得持有此值，也不能直接連 PostgreSQL。
+
+## 開發與驗證
+
+Backend 可用 SQLite 做本機開發，但 SQLite 不是正式資料來源：
+
+```bash
+cd backend
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m pytest -q
+```
+
+Frontend：
 
 ```bash
 cd frontend
 npm install
 npm run electron:dev
+npm run lint
+npm run build
 ```
 
-`electron:dev` 每次啟動都會先詢問 Application Mode。執行期間不能切換角色；重新啟動後才能改選：
+Electron 不再詢問 Server／Client Mode。一般啟動永遠是 Cloud Client；只有指定 GMAT 電腦在啟動時提供 secret，才會額外啟動 Worker 與 Scenario Administration：
 
 ```bash
-npm run electron:server
-npm run electron:client
+cd frontend
+MISSION_DASHBOARD_WORKER_TOKEN='<same-secret-as-cloud>' \
+MISSION_DASHBOARD_API_BASE_URL='https://missiondashboard.fastapicloud.dev/api' \
+npm run electron:dev
 ```
 
-Server Mode 啟動中央 FastAPI、SQLite、Scenario Administration 與官方 GMAT Worker；Client Mode 只連線到指定 Server，不能修改 Scenario。
+本專案的指定 macOS Worker secret 會放在 Keychain service
+`org.nckurunspace.mission-dashboard.worker-token`，不寫入檔案或 Git。設定完成後可用：
 
-單獨執行後端只會啟動 API，不會啟動 Electron 中央 GMAT Worker：
+```bash
+frontend/scripts/run_gmat_worker_macos.sh --dev
+# 安裝正式 App 後：
+frontend/scripts/run_gmat_worker_macos.sh
+```
+
+## FastAPI Cloud + Neon 上線
+
+先在 Neon 建立 project/database，複製 pooled connection string，再設定 Cloud：
 
 ```bash
 cd backend
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.venv/bin/fastapi cloud env set DATABASE_URL 'postgresql://...'
+.venv/bin/fastapi cloud env set MISSION_DASHBOARD_WORKER_TOKEN '<random-secret>'
+.venv/bin/fastapi deploy .
 ```
 
-本機啟動無狀態 Cloud relay（另一個終端）：
+部署後依序驗證：
 
 ```bash
-cd backend
-CENTRAL_SERVER_URL=http://127.0.0.1:8000 \
-  .venv/bin/python -m uvicorn cloud_relay.main:app --host 127.0.0.1 --port 8001
+curl https://missiondashboard.fastapicloud.dev/health
+curl https://missiondashboard.fastapicloud.dev/api/scenarios
 ```
 
-Client 的 Server address 設為 `http://127.0.0.1:8001`，所有公開 API 會由 Cloud relay 同步轉送。`/api/internal/*` 永遠不會由 Cloud 暴露。
+`/health` 應顯示 `database: "neon"`。指定 Worker 啟動後，`validationWorker` 應由 `offline` 變成 `ready`，且 `physicalValidation` 為 `true`。
 
-### FastAPI Cloud
+2026-07-22 的正式端到端驗證已確認兩個方向：參考解經本機 GMAT
+propagation 後為 `passed`，錯誤案例 `ΔV=[1,0,0]`、`finalCoastTime=100`
+為 `failed`；Cloud 不會僅依照 Client JSON 判定成功。
 
-正式 relay 已部署至：
-
-```text
-https://missiondashboard.fastapicloud.dev
-```
-
-部署來源位於 `backend/cloud_relay/`。Cloud 不保存 Scenario、Solution、Submission 或 SQLite，只同步轉送公開 API。設定中央 Server 的安全公開網址後，使用以下指令更新 Cloud 環境變數並重新部署：
-
-```bash
-cd backend/cloud_relay
-../.venv/bin/fastapi cloud env set CENTRAL_SERVER_URL "https://central-server.example.com"
-../.venv/bin/fastapi deploy .
-```
-
-在 `CENTRAL_SERVER_URL` 完成前，不應把 Cloud URL 設為競賽 Client 的正式連線位址。
-
-## 驗證
-
-```bash
-cd backend && .venv/bin/python -m pytest -q
-cd ../frontend && npm run lint && npm run build
-```
-
-詳細提交格式見 [backend/docs/gmat-validation-api-contract.md](backend/docs/gmat-validation-api-contract.md)。
+詳細契約見 [backend/docs/gmat-validation-api-contract.md](backend/docs/gmat-validation-api-contract.md)。
 
 ## macOS 發布
 
-安裝 build dependencies 後，可重跑 Apple Silicon 發布包：
-
 ```bash
-cd backend && .venv/bin/pip install -r requirements-build.txt
-cd ../frontend && npm install && npm run electron:build:mac
+cd frontend
+npm install
+npm run electron:build:mac
 ```
 
-輸出檔為 `frontend/dist/Mission-Dashboard-<version>-arm64.dmg`。目前使用 ad-hoc code signing，尚未進行 Apple notarization；首次開啟可能需要在 Finder 右鍵選擇 Open。
+App 不再捆綁 FastAPI/SQLite sidecar，因此安裝包只包含 UI、Electron 與 GMAT 執行整合。輸出為 `frontend/dist/Mission-Dashboard-<version>-arm64.dmg`；目前為 ad-hoc signing，尚未 notarize。

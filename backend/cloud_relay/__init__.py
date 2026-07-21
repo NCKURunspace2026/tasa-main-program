@@ -1,1 +1,1 @@
-"""Stateless public relay for the Mission Dashboard central Server."""
+"""Compatibility package for the former Cloud relay entrypoint."""

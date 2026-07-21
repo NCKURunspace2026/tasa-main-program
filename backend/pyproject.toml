@@ -1,0 +1,20 @@
+[project]
+name = "mission-dashboard-backend"
+version = "0.2.0"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "fastapi[standard]==0.116.1",
+  "SQLAlchemy==2.0.41",
+  "psycopg[binary]==3.2.13",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["tests*", "cloud_relay*"]
+
+[tool.fastapi]
+entrypoint = "app.main:app"

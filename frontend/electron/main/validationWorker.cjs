@@ -1,8 +1,14 @@
 const { validateSubmission } = require("./validationService.cjs");
 
-const PROVIDER = "central-gmat-console";
+const PROVIDER = "official-gmat-console";
 
-function createValidationWorker({ apiBaseUrl, workerToken, readConfig, pollIntervalMs = 2000 }) {
+function createValidationWorker({
+  apiBaseUrl,
+  workerToken,
+  workerId,
+  readConfig,
+  pollIntervalMs = 2000,
+}) {
   let stopped = false;
   let timer = null;
 
@@ -11,7 +17,6 @@ function createValidationWorker({ apiBaseUrl, workerToken, readConfig, pollInter
       ...options,
       headers: {
         "Content-Type": "application/json",
-        "X-Device-Role": "server",
         "X-Worker-Token": workerToken,
         ...options.headers,
       },
@@ -26,7 +31,7 @@ function createValidationWorker({ apiBaseUrl, workerToken, readConfig, pollInter
   async function postResult(submissionId, result) {
     return request(`/internal/validation/${submissionId}/result`, {
       method: "POST",
-      body: JSON.stringify(result),
+      body: JSON.stringify({ ...result, workerId }),
     });
   }
 
@@ -37,10 +42,13 @@ function createValidationWorker({ apiBaseUrl, workerToken, readConfig, pollInter
       const gmatConfigured = Boolean(config.executablePath);
       await request("/internal/validation/heartbeat", {
         method: "POST",
-        body: JSON.stringify({ provider: PROVIDER, gmatConfigured }),
+        body: JSON.stringify({ workerId, provider: PROVIDER, gmatConfigured }),
       });
       if (gmatConfigured) {
-        const { item } = await request("/internal/validation/next", { method: "POST" });
+        const { item } = await request("/internal/validation/next", {
+          method: "POST",
+          body: JSON.stringify({ workerId }),
+        });
         if (item) await validateItem(item, config);
       }
     } catch (error) {
@@ -61,13 +69,15 @@ function createValidationWorker({ apiBaseUrl, workerToken, readConfig, pollInter
       });
       if (result.status !== "validated") {
         await postResult(item.submissionId, {
+          claimToken: item.claimToken,
           status: "failed",
           provider: PROVIDER,
-          errorMessage: "Central GMAT constraints did not pass.",
+          errorMessage: "Official GMAT constraints did not pass.",
         });
         return;
       }
       await postResult(item.submissionId, {
+        claimToken: item.claimToken,
         status: "passed",
         provider: PROVIDER,
         minimumDistanceKm: result.minimumDistance,
@@ -77,6 +87,7 @@ function createValidationWorker({ apiBaseUrl, workerToken, readConfig, pollInter
       });
     } catch (error) {
       await postResult(item.submissionId, {
+        claimToken: item.claimToken,
         status: "failed",
         provider: PROVIDER,
         errorMessage: error.message,

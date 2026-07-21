@@ -127,7 +127,7 @@ export default function Sidebar({ currentPage, onNavigate, runtimeRole }) {
         <div className="sidebar-content">
           <div className={`sidebar-role sidebar-role-${runtimeRole}`}>
             <span />
-            <strong>{runtimeRole === "server" ? "SERVER MODE" : "CLIENT MODE"}</strong>
+            <strong>{runtimeRole === "worker" ? "OFFICIAL VALIDATOR" : "CLOUD CONNECTED"}</strong>
           </div>
           <SideNavSection title="Competition">
             {navigationItems.map(({ id, label, icon }) => (

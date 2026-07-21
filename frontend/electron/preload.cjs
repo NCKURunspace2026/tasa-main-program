@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld("missionDashboardDesktop", {
   selectGmatInstallation: () => ipcRenderer.invoke("gmat:select-installation"),
   saveGmatConfig: (config) => ipcRenderer.invoke("gmat:save-config", config),
   validateWithLocalGmat: (request) => ipcRenderer.invoke("gmat:validate-submission", request),
+  adminCloudRequest: (path, options) => ipcRenderer.invoke("cloud:admin-request", path, options),
 });
