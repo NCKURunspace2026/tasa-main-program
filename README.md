@@ -34,9 +34,9 @@ Leaderboard 是 `passed` Submission 的查詢結果，不另建資料表。
 |---|---|---|
 | Client App | 已實作 | React、Electron IPC、本機 GMAT 預驗證、HTTP Client |
 | Central Server | 已實作於 Electron Server mode | FastAPI、Service、Repository、SQLite、Validation Worker、中央 GMAT、Leaderboard |
-| FastAPI Cloud Relay | 已實作，尚未部署 | 無狀態 health check 與公開 API forwarding；不暴露 internal worker API |
+| FastAPI Cloud Relay | 已實作並部署 | FastAPI Cloud App `715e07b4-5ec3-4e69-b95d-b25587cc736c`；無狀態 health check 與公開 API forwarding；不暴露 internal worker API |
 
-目前三區程式結構已具備，但 Cloud relay 尚未部署固定公開 URL。正式上線仍需 Transport Layer Security (TLS)、身分驗證與部署平台的網路故障處理。
+FastAPI Cloud 公開網址為 <https://missiondashboard.fastapicloud.dev>，平台已提供 HTTPS。目前 relay 已上線，但 `CENTRAL_SERVER_URL` 尚未設定，因此 `/health` 會回 `503`，Client、Cloud、中央 Server 的端到端連線尚未完成。正式上線仍需中央 Server 的安全公開入口、身分驗證與網路故障處理。
 
 ## 檔案結構
 
@@ -80,6 +80,24 @@ CENTRAL_SERVER_URL=http://127.0.0.1:8000 \
 ```
 
 Client 的 Server address 設為 `http://127.0.0.1:8001`，所有公開 API 會由 Cloud relay 同步轉送。`/api/internal/*` 永遠不會由 Cloud 暴露。
+
+### FastAPI Cloud
+
+正式 relay 已部署至：
+
+```text
+https://missiondashboard.fastapicloud.dev
+```
+
+部署來源位於 `backend/cloud_relay/`。Cloud 不保存 Scenario、Solution、Submission 或 SQLite，只同步轉送公開 API。設定中央 Server 的安全公開網址後，使用以下指令更新 Cloud 環境變數並重新部署：
+
+```bash
+cd backend/cloud_relay
+../.venv/bin/fastapi cloud env set CENTRAL_SERVER_URL "https://central-server.example.com"
+../.venv/bin/fastapi deploy .
+```
+
+在 `CENTRAL_SERVER_URL` 完成前，不應把 Cloud URL 設為競賽 Client 的正式連線位址。
 
 ## 驗證
 
