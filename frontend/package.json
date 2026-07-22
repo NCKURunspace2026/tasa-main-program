@@ -64,7 +64,8 @@
       }
     ],
     "mac": {
-      "target": ["dmg", "zip"]
+      "target": ["dmg", "zip"],
+      "artifactName": "Mission-Dashboard-${version}-${arch}.${ext}"
     },
     "win": {
       "target": "nsis",

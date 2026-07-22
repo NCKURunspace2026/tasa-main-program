@@ -23,7 +23,7 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
     try {
       await activeUpdater.checkForUpdates();
     } catch (error) {
-      publish({ state: "error", message: error.message });
+      publish({ state: "error", message: formatUpdateError(error, process.platform) });
     }
     return status;
   });
@@ -50,7 +50,7 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
     if (choice.response === 0) {
       publish({ state: "downloading", message: `Downloading version ${info.version}…`, percent: 0 });
       activeUpdater.downloadUpdate().catch((error) => {
-        publish({ state: "error", message: error.message });
+        publish({ state: "error", message: formatUpdateError(error, process.platform) });
       });
     }
   });
@@ -86,11 +86,11 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
   activeUpdater.on("error", (error) => publish({
     state: "error",
     percent: null,
-    message: `Update check failed: ${error.message}`,
+    message: formatUpdateError(error, process.platform),
   }));
 
   const check = () => activeUpdater.checkForUpdates().catch((error) => {
-    publish({ state: "error", message: `Update check failed: ${error.message}` });
+    publish({ state: "error", message: formatUpdateError(error, process.platform) });
   });
   const firstCheck = setTimeout(check, 30_000);
   const periodicCheck = setInterval(check, 6 * 60 * 60 * 1000);
@@ -99,4 +99,13 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
   return { getStatus: () => status, check };
 }
 
-module.exports = { createAppUpdater };
+function formatUpdateError(error, platform) {
+  const message = String(error?.message ?? error ?? "Unknown update error.");
+  if (platform === "darwin" && /latest-mac\.yml|HTTP(?:Error)?:? 404|404.*GET/is.test(message)) {
+    return "The latest release has no macOS update metadata. Download its DMG manually from GitHub Releases.";
+  }
+  const firstLine = message.split(/\r?\n/, 1)[0].replace(/https?:\/\/\S+/g, "the release server");
+  return `Update check failed: ${firstLine.slice(0, 240)}`;
+}
+
+module.exports = { createAppUpdater, formatUpdateError };

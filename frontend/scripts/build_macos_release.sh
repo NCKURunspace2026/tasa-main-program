@@ -13,10 +13,11 @@ npm run smoke:renderer
 CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --arm64 --dir
 codesign --force --deep --sign - "dist/mac-arm64/Mission Dashboard.app"
 codesign --verify --deep --strict "dist/mac-arm64/Mission Dashboard.app"
-hdiutil create \
-  -volname "Mission Dashboard ${version}" \
-  -srcfolder "dist/mac-arm64/Mission Dashboard.app" \
-  -ov \
-  -format UDZO \
-  "$artifact"
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder \
+  --mac dmg zip \
+  --arm64 \
+  --prepackaged "dist/mac-arm64/Mission Dashboard.app" \
+  --publish never
 hdiutil verify "$artifact"
+shasum -a 256 "$artifact" > "$artifact.sha256.txt"
+test -s "dist/latest-mac.yml"
