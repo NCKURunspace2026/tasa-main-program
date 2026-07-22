@@ -31,5 +31,5 @@ test("forces an arm64 Python sidecar on Apple Silicon development machines", () 
   });
   assert.equal(result.command, "/usr/bin/arch");
   assert.equal(result.args[0], "-arm64");
-  assert.match(result.args[1], /backend\/.venv\/bin\/python$/);
+  assert.match(result.args[1].replaceAll("\\", "/"), /backend\/.venv\/bin\/python$/);
 });
