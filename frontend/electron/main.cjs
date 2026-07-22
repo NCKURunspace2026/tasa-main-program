@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, nativeImage } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
@@ -67,6 +67,7 @@ app.whenReady().then(async () => {
     app,
     dialog,
     ipcMain,
+    shell,
     getWindows: () => BrowserWindow.getAllWindows(),
   });
 

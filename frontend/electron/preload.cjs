@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("missionDashboardDesktop", {
   adminCloudRequest: (path, options) => ipcRenderer.invoke("cloud:admin-request", path, options),
   getUpdateStatus: () => ipcRenderer.invoke("app:update:get-status"),
   checkForUpdates: () => ipcRenderer.invoke("app:update:check"),
+  openUpdateReleases: () => ipcRenderer.invoke("app:update:open-releases"),
   onUpdateStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("app:update-status", listener);

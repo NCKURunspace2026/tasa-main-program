@@ -1,13 +1,18 @@
-function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
+const RELEASES_URL = "https://github.com/NCKURunspace2026/tasa-main-program/releases/latest";
+
+function createAppUpdater({ app, dialog, ipcMain, getWindows, updater, shell, platform = process.platform }) {
+  const requiresManualInstall = app.isPackaged && platform === "darwin";
   const activeUpdater = app.isPackaged
     ? (updater ?? require("electron-updater").autoUpdater)
     : null;
   let status = {
-    state: app.isPackaged ? "idle" : "disabled",
+    state: requiresManualInstall ? "manual" : app.isPackaged ? "idle" : "disabled",
     currentVersion: app.getVersion(),
     availableVersion: null,
     percent: null,
-    message: app.isPackaged ? "Ready to check for updates." : "Updates are disabled in development.",
+    message: requiresManualInstall
+      ? "macOS updates require a manually installed DMG until the app has a Developer ID signature."
+      : app.isPackaged ? "Ready to check for updates." : "Updates are disabled in development.",
   };
 
   function publish(next) {
@@ -17,18 +22,25 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
   }
 
   ipcMain.handle("app:update:get-status", () => status);
+  ipcMain.handle("app:update:open-releases", async () => {
+    await shell?.openExternal(RELEASES_URL);
+    return status;
+  });
   ipcMain.handle("app:update:check", async () => {
+    if (requiresManualInstall) return status;
     if (!app.isPackaged) return status;
     publish({ state: "checking", message: "Checking GitHub Releases…", percent: null });
     try {
       await activeUpdater.checkForUpdates();
     } catch (error) {
-      publish({ state: "error", message: formatUpdateError(error, process.platform) });
+      publish({ state: "error", message: formatUpdateError(error, platform) });
     }
     return status;
   });
 
-  if (!app.isPackaged) return { getStatus: () => status, check: () => status };
+  if (requiresManualInstall || !app.isPackaged) {
+    return { getStatus: () => status, check: () => status };
+  }
 
   activeUpdater.autoDownload = false;
   activeUpdater.autoInstallOnAppQuit = true;
@@ -50,7 +62,7 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
     if (choice.response === 0) {
       publish({ state: "downloading", message: `Downloading version ${info.version}…`, percent: 0 });
       activeUpdater.downloadUpdate().catch((error) => {
-        publish({ state: "error", message: formatUpdateError(error, process.platform) });
+        publish({ state: "error", message: formatUpdateError(error, platform) });
       });
     }
   });
@@ -86,11 +98,11 @@ function createAppUpdater({ app, dialog, ipcMain, getWindows, updater }) {
   activeUpdater.on("error", (error) => publish({
     state: "error",
     percent: null,
-    message: formatUpdateError(error, process.platform),
+    message: formatUpdateError(error, platform),
   }));
 
   const check = () => activeUpdater.checkForUpdates().catch((error) => {
-    publish({ state: "error", message: formatUpdateError(error, process.platform) });
+    publish({ state: "error", message: formatUpdateError(error, platform) });
   });
   const firstCheck = setTimeout(check, 30_000);
   const periodicCheck = setInterval(check, 6 * 60 * 60 * 1000);

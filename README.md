@@ -95,7 +95,7 @@ Mission Dashboard 保存可重現的 Scenario、Decision Variables、單位／�
 
 已安裝的 `v0.1.0` 沒有 updater，因此必須最後一次手動安裝 `v0.2.0`；之後才可直接在 App 內更新。
 
-Windows workflow 會把 NSIS 安裝器、`latest.yml` 與 blockmap 一起放進 GitHub Release。macOS 自動更新必須使用 Developer ID 正式簽章；目前的 ad-hoc 簽章只能產生手動安裝包，取得 Apple Developer 憑證並 notarize 前不能宣稱 macOS 自動更新已可用。
+Windows workflow 會把 NSIS 安裝器、`latest.yml` 與 blockmap 一起放進 GitHub Release。macOS 自動更新必須使用 Developer ID 正式簽章；目前的 ad-hoc 簽章只能產生手動安裝包。App 會開啟 GitHub Releases 供使用者下載 DMG，不會再啟動必然被 ShipIt 拒絕的自動安裝。取得 Apple Developer 憑證並 notarize 後才重新啟用 macOS 自動更新。
 
 macOS：
 

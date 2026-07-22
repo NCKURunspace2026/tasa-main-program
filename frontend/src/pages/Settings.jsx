@@ -259,6 +259,10 @@ export default function Settings({ runtimeConfig }) {
   }
 
   async function checkForUpdates() {
+    if (updateStatus?.state === "manual") {
+      await window.missionDashboardDesktop?.openUpdateReleases?.();
+      return;
+    }
     if (!window.missionDashboardDesktop?.checkForUpdates) {
       setMessage("App updates are available in the installed Electron app only.");
       return;
@@ -566,7 +570,7 @@ export default function Settings({ runtimeConfig }) {
                 </SettingsRow>
               ) : null}
               <button className="settings-primary-button" type="button" onClick={checkForUpdates}>
-                Check for Updates
+                {updateStatus?.state === "manual" ? "Open GitHub Releases" : "Check for Updates"}
               </button>
             </SettingsSection>
           ) : null}
