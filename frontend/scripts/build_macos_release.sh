@@ -19,5 +19,5 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder \
   --prepackaged "dist/mac-arm64/Mission Dashboard.app" \
   --publish never
 hdiutil verify "$artifact"
-shasum -a 256 "$artifact" > "$artifact.sha256.txt"
+(cd "$frontend_dir/dist" && shasum -a 256 "$(basename "$artifact")") > "$artifact.sha256.txt"
 test -s "dist/latest-mac.yml"
