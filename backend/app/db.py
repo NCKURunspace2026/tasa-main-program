@@ -1,8 +1,9 @@
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base, Scenario
@@ -11,26 +12,43 @@ from .models import Base, Scenario
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = BACKEND_ROOT / "data" / "main.db"
 DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+BUILTIN_SCENARIO_TIMESTAMP = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
-def _normalize_database_url(value: str) -> str:
-    # Neon supplies a standard postgresql:// URL. Select SQLAlchemy's psycopg 3
-    # driver explicitly so Cloud does not depend on the legacy psycopg2 package.
-    if value.startswith("postgres://"):
-        return value.replace("postgres://", "postgresql+psycopg://", 1)
-    if value.startswith("postgresql://"):
-        return value.replace("postgresql://", "postgresql+psycopg://", 1)
-    return value
-
-
-DATABASE_URL = _normalize_database_url(
-    os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+configured_data_dir = os.getenv("MISSION_DASHBOARD_DATA_DIR")
+database_path = (
+    Path(configured_data_dir).expanduser().resolve() / "main.db"
+    if configured_data_dir
+    else DEFAULT_DB_PATH
 )
+database_path.parent.mkdir(parents=True, exist_ok=True)
+node_role = os.getenv("MISSION_DASHBOARD_NODE_ROLE", "local")
+# FastAPI Cloud may keep an integration-managed DATABASE_URL that cannot be
+# edited through the CLI. Relay mode deliberately ignores it so Neon is never
+# read or written; the Cloud copy is a reconstructible /tmp cache.
+configured_database_url = os.getenv("DATABASE_URL", f"sqlite:///{database_path}")
+DATABASE_URL = (
+    "sqlite:////tmp/mission-dashboard-relay.db"
+    if node_role == "relay"
+    else configured_database_url
+)
+if not DATABASE_URL.startswith("sqlite"):
+    raise RuntimeError("Mission Dashboard local-first storage requires a SQLite DATABASE_URL.")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
 )
+
+
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def _configure_sqlite(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -43,6 +61,7 @@ def initialize_database() -> None:
     Base.metadata.create_all(engine)
     _add_queue_lease_columns_for_existing_database()
     _add_soft_delete_columns_for_existing_database()
+    _add_sync_columns_for_existing_database()
     with SessionLocal.begin() as session:
         definition_path = BACKEND_ROOT / "docs" / "scenarios" / "small-challenge-v1.json"
         definition = json.loads(definition_path.read_text(encoding="utf-8"))
@@ -55,6 +74,8 @@ def initialize_database() -> None:
                 scenario_json=definition,
                 schema_version=int(float(definition.get("schemaVersion", 1))),
                 status="active",
+                created_at=BUILTIN_SCENARIO_TIMESTAMP,
+                updated_at=BUILTIN_SCENARIO_TIMESTAMP,
             ))
         elif not all(
             key in (scenario.scenario_json or {})
@@ -81,11 +102,9 @@ def initialize_database() -> None:
 
 
 def _add_queue_lease_columns_for_existing_database() -> None:
-    """Small forward-only migration for pre-Neon development databases.
+    """Small forward-only migration for existing local databases.
 
-    A fresh Neon database is created from SQLAlchemy metadata. This keeps an
-    existing local SQLite database usable without retaining it as production
-    state. A full migration framework can replace this once the schema grows.
+    A full migration framework can replace this once the schema grows.
     """
     existing = {column["name"] for column in inspect(engine).get_columns("submissions")}
     additions = {
@@ -104,11 +123,25 @@ def _add_queue_lease_columns_for_existing_database() -> None:
 
 
 def _add_soft_delete_columns_for_existing_database() -> None:
-    """Keep existing local and cloud databases compatible with soft deletion."""
+    """Keep existing databases compatible with soft deletion."""
     existing = {column["name"] for column in inspect(engine).get_columns("solutions")}
     if "deleted_at" not in existing:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE solutions ADD COLUMN deleted_at TIMESTAMP"))
+
+
+def _add_sync_columns_for_existing_database() -> None:
+    """Add timestamps needed for deterministic, idempotent replica sync."""
+    for table_name in ("solutions", "submissions"):
+        existing = {column["name"] for column in inspect(engine).get_columns(table_name)}
+        if "updated_at" not in existing:
+            with engine.begin() as connection:
+                connection.execute(text(
+                    f"ALTER TABLE {table_name} ADD COLUMN updated_at TIMESTAMP"
+                ))
+                connection.execute(text(
+                    f"UPDATE {table_name} SET updated_at = created_at WHERE updated_at IS NULL"
+                ))
 
 
 def reset_database(session: Session) -> None:

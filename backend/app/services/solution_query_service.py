@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import Solution, Submission
+from ..models.entities import utc_now
 from ..repositories.solution_repository import find_all, find_by_id
 
 
@@ -92,6 +93,7 @@ def set_solution_deleted(
     if solution is None:
         return None
     solution.deleted_at = datetime.now(timezone.utc) if deleted else None
+    solution.updated_at = utc_now()
     session.commit()
     return {
         "solutionId": solution.id,

@@ -1,1 +1,1 @@
-"""Database access boundaries for the FastAPI Cloud backend."""
+"""Database access boundaries for local-first Mission Dashboard storage."""

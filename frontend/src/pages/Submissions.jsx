@@ -29,7 +29,7 @@ const validationDefinitions = [
     id: "result",
     title: "Validation result",
     description:
-      "The official result is stored by FastAPI Cloud.",
+      "The official result is stored in this device's local database.",
   },
 ];
 
@@ -356,7 +356,7 @@ export default function Submissions({ onNavigate }) {
     <section className="submissions-page">
       <PageHeader
         title="Submissions"
-        description="Enter the trajectory decision variables. Local GMAT checks the input before FastAPI Cloud queues the official GMAT validation."
+        description="Enter the trajectory decision variables. Local GMAT checks the input before this device queues official GMAT validation."
       >
         <div className="submission-scenario-field">
           <label htmlFor="submission-scenario">

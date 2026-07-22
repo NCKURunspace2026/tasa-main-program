@@ -1,0 +1,4 @@
+provider: github
+owner: NCKURunspace2026
+repo: tasa-main-program
+updaterCacheDirName: mission-dashboard-updater

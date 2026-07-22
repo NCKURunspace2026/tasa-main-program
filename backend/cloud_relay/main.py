@@ -1,8 +1,8 @@
-"""Compatibility entrypoint for the former stateless relay.
+"""Compatibility entrypoint for the optional replica relay cache.
 
-FastAPI Cloud now deploys ``app.main:app`` from the backend directory. Keeping
-this import avoids breaking old local commands while ensuring there is only one
-backend implementation.
+FastAPI Cloud deploys ``app.main:app`` from the backend directory. The same API
+serves local nodes and the reconstructible relay role so their sync contract
+cannot drift.
 """
 
 from app.main import app

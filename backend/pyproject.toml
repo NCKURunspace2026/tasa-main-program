@@ -5,7 +5,6 @@ requires-python = ">=3.11,<3.15"
 dependencies = [
   "fastapi[standard]==0.116.1",
   "SQLAlchemy==2.0.41",
-  "psycopg[binary]==3.2.13",
 ]
 
 [build-system]

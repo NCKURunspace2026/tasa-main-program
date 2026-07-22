@@ -2,10 +2,12 @@
 set -euo pipefail
 
 frontend_dir="$(cd "$(dirname "$0")/.." && pwd)"
+backend_dir="$(cd "$frontend_dir/../backend" && pwd)"
 version="$(node -p "require('$frontend_dir/package.json').version")"
 artifact="$frontend_dir/dist/Mission-Dashboard-${version}-arm64.dmg"
 
 cd "$frontend_dir"
+"$backend_dir/scripts/build_sidecar_macos.sh"
 npm run build
 npm run smoke:renderer
 CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --arm64 --dir

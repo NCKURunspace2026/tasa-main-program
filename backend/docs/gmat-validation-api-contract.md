@@ -5,8 +5,8 @@
 ```text
 React 輸入 Solution
 → Electron 本機 GMAT 預驗證
-→ FastAPI Cloud POST /api/submissions
-→ Neon transaction 保存 Solution + pending Submission
+→ 本機 FastAPI POST /api/submissions
+→ 本機 SQLite transaction 保存 Solution + pending Submission
 → 本機 GMAT Worker 主動 claim
 → GMAT propagation
 → Worker POST passed / failed
@@ -41,7 +41,7 @@ Request：
 }
 ```
 
-成功回傳 HTTP `202 Accepted`；`accepted` 只表示 Cloud 已持久化與排入 Queue，不代表官方 GMAT 已通過。
+成功回傳 HTTP `202 Accepted`；`accepted` 只表示目前裝置已持久化與排入 Queue，不代表官方 GMAT 已通過。
 
 ## Worker 契約
 
@@ -51,7 +51,7 @@ Request：
 - `POST /api/internal/validation/next`：包含 `workerId`，回傳任務、`claimToken` 與 `leaseExpiresAt`。
 - `POST /api/internal/validation/{submissionId}/result`：必須回傳相同 `workerId` 與 `claimToken`。
 
-Neon PostgreSQL 使用 row-level lock 與 `SKIP LOCKED` 避免多 Worker 同時領取同一任務。Claim lease 預設 180 秒；Worker 崩潰後任務可重新排入，而舊 claim token 會失效。
+SQLite 使用條件式 update 避免同一裝置的多 Worker 同時領取同一任務。Claim lease 預設 180 秒；Worker 崩潰後任務可重新排入，而舊 claim token 會失效。
 
 ## Scenario 管理
 
@@ -69,7 +69,8 @@ Scenario 保存固定物理環境；Decision Variables 只能存在 Solution。
 
 `GET /health`：
 
-- `database: "neon"`：正式 Neon 連線成功。
+- `database: "sqlite"`：本機 SQLite 可用。
+- `nodeRole: "local"`：正式本地資料節點；`relay` 表示可重建中繼快取。
 - `validationWorker: "offline"`：沒有 30 秒內 heartbeat。
 - `waiting-for-gmat`：Worker 在線但尚未設定 GMAT。
 - `ready`：Worker 與 GMAT 都可用；此時 `physicalValidation` 才是 `true`。

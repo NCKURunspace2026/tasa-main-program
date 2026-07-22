@@ -27,7 +27,7 @@ class Scenario(Base):
     status: Mapped[str] = mapped_column(String(16), default="active", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+        DateTime(timezone=True), default=utc_now
     )
 
 
@@ -39,6 +39,9 @@ class Solution(Base):
     name: Mapped[str] = mapped_column(String(180))
     decision_variables_json: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), default=None, index=True
     )
@@ -66,6 +69,9 @@ class Submission(Base):
     claim_token: Mapped[Optional[str]] = mapped_column(String(64))
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
@@ -78,3 +84,14 @@ class ValidationWorker(Base):
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
+
+
+class SyncSetting(Base):
+    __tablename__ = "sync_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    peer_url: Mapped[Optional[str]] = mapped_column(String(500))
+    shared_key: Mapped[Optional[str]] = mapped_column(String(256))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[Optional[str]] = mapped_column(Text)

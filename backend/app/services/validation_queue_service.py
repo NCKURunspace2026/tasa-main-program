@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from ..models import Solution, Submission
+from ..models.entities import utc_now
 from ..repositories import scenario_repository, submission_repository
 from ..schemas.validation import CentralValidationResult
 from .score_service import InvalidScoreConfigError, calculate_score
@@ -53,6 +54,7 @@ def complete_submission(
         raise SubmissionStateError("The validation claim is missing, stale, or owned by another worker.")
 
     submission.validated_at = datetime.now(timezone.utc)
+    submission.updated_at = utc_now()
     submission.lease_expires_at = None
     submission.claim_token = None
     if result.status == "failed":

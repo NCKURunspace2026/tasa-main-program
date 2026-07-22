@@ -10,22 +10,28 @@ import {
   downloadDataExport,
   getCloudAddress,
   getScenarios,
+  getSyncSettings,
   getSolutions,
   restoreScenario,
   restoreSolution,
   setCloudAddress,
   testCloudConnection,
+  runDataSync,
+  updateSyncSettings,
   updateScenario as updateScenarioRequest,
 } from "../services/api.js";
 
 const sections = [
   ["connection", "Connection"],
+  ["updates", "App Updates"],
   ["validation", "Local GMAT"],
   ["administration", "Scenario Administration"],
 ];
 
 const defaultSettings = {
   cloudAddress: getCloudAddress(),
+  syncEnabled: true,
+  syncSharedKey: "",
   gmatExecutablePath: "",
   validationTimeout: "120",
   keepTemporaryFiles: false,
@@ -84,6 +90,7 @@ export default function Settings({ runtimeConfig }) {
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
   const [isSavingScenario, setIsSavingScenario] = useState(false);
   const [solutions, setSolutions] = useState([]);
+  const [updateStatus, setUpdateStatus] = useState(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -112,8 +119,33 @@ export default function Settings({ runtimeConfig }) {
       .catch((error) => {
         if (isCurrent) setMessage(error.message);
       });
+    getSyncSettings()
+      .then((sync) => {
+        if (isCurrent) {
+          setSettings((current) => ({
+            ...current,
+            cloudAddress: sync.peerUrl?.replace(/\/api$/, "") ?? current.cloudAddress,
+            syncEnabled: sync.enabled,
+          }));
+        }
+      })
+      .catch(() => {});
     return () => { isCurrent = false; };
   }, [canAdmin]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    window.missionDashboardDesktop?.getUpdateStatus?.()
+      .then((status) => { if (isCurrent) setUpdateStatus(status); })
+      .catch(() => {});
+    const unsubscribe = window.missionDashboardDesktop?.onUpdateStatus?.((status) => {
+      if (isCurrent) setUpdateStatus(status);
+    });
+    return () => {
+      isCurrent = false;
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!canAdmin || !selectedScenarioId) {
@@ -136,6 +168,11 @@ export default function Settings({ runtimeConfig }) {
   async function saveSettings() {
     try {
       setCloudAddress(settings.cloudAddress);
+      await updateSyncSettings({
+        peerUrl: settings.cloudAddress,
+        enabled: settings.syncEnabled,
+        ...(settings.syncSharedKey ? { sharedKey: settings.syncSharedKey } : {}),
+      });
       window.localStorage.setItem("mission-dashboard-settings", JSON.stringify(settings));
       await window.missionDashboardDesktop?.saveGmatConfig?.({
         gmatInstallationPath: settings.gmatExecutablePath.trim(),
@@ -150,15 +187,37 @@ export default function Settings({ runtimeConfig }) {
   }
 
   async function testConnection() {
-    setMessage("Testing FastAPI Cloud connection…");
+    setMessage("Testing optional relay connection…");
     try {
       const result = await testCloudConnection(settings.cloudAddress);
       setMessage(
-        `Cloud connected in ${result.latencyMs} ms. Official validator: ${result.validationWorker}${result.physicalValidation ? " (ready)" : ""}.`,
+        `Relay connected in ${result.latencyMs} ms (${result.nodeRole ?? "unknown role"}).`,
       );
     } catch (error) {
       setMessage(error.message);
     }
+  }
+
+  async function syncNow() {
+    setMessage("Synchronizing passed Solutions…");
+    try {
+      const result = await runDataSync();
+      if (result.status === "error") throw new Error(result.lastError);
+      setMessage(result.status === "disabled"
+        ? "Synchronization is disabled on this device."
+        : `Sync complete: pushed ${result.pushed}, pulled ${result.pulled}, conflicts ${result.conflicts.length}.`);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function checkForUpdates() {
+    if (!window.missionDashboardDesktop?.checkForUpdates) {
+      setMessage("App updates are available in the installed Electron app only.");
+      return;
+    }
+    const status = await window.missionDashboardDesktop.checkForUpdates();
+    setUpdateStatus(status);
   }
 
   async function browseGmat() {
@@ -287,7 +346,7 @@ export default function Settings({ runtimeConfig }) {
         item.scenarioId === updated.scenarioId ? updated : item
       )));
       setScenarioLimits(readScenarioLimits(updated.scenarioJson));
-      setMessage(`${updated.scenarioId} limits saved to FastAPI Cloud.`);
+      setMessage(`${updated.scenarioId} limits saved to this device.`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -340,7 +399,7 @@ export default function Settings({ runtimeConfig }) {
         title="Settings"
         description={isWorker
           ? "This designated computer runs official GMAT validation and Scenario Administration."
-          : "This application connects directly to the FastAPI Cloud backend."}
+          : "This application stores mission data in this device's local SQLite database."}
       />
 
       <div className="settings-layout">
@@ -366,10 +425,10 @@ export default function Settings({ runtimeConfig }) {
         <main className="settings-content">
           {activeSection === "connection" ? (
             <SettingsSection
-              title="FastAPI Cloud"
-              description="All clients and the official validation computer use this public API. Persistent state is stored in Neon PostgreSQL."
+              title="Optional Data Relay"
+              description="Local SQLite is authoritative. The relay only helps trusted devices exchange Scenario and passed Solution records."
             >
-              <SettingsRow label="Cloud backend address">
+              <SettingsRow label="Relay address">
                 <input
                   name="cloudAddress"
                   value={settings.cloudAddress}
@@ -377,8 +436,29 @@ export default function Settings({ runtimeConfig }) {
                   placeholder="https://missiondashboard.fastapicloud.dev"
                 />
               </SettingsRow>
+              <SettingsRow label="Enable background synchronization">
+                <input
+                  name="syncEnabled"
+                  type="checkbox"
+                  checked={settings.syncEnabled}
+                  onChange={updateSetting}
+                />
+              </SettingsRow>
+              <SettingsRow
+                label="Shared sync key"
+                description="Leave blank to keep the key already saved in the local database."
+              >
+                <input
+                  name="syncSharedKey"
+                  type="password"
+                  value={settings.syncSharedKey}
+                  onChange={updateSetting}
+                  autoComplete="off"
+                />
+              </SettingsRow>
               <div className="settings-inline-actions scenario-form-actions">
-                <button className="settings-secondary-button" type="button" onClick={testConnection}>Test Connection</button>
+                <button className="settings-secondary-button" type="button" onClick={testConnection}>Test Relay</button>
+                <button className="settings-secondary-button" type="button" onClick={syncNow}>Sync Now</button>
                 <button className="settings-primary-button" type="button" onClick={saveSettings}>Save</button>
               </div>
             </SettingsSection>
@@ -426,6 +506,28 @@ export default function Settings({ runtimeConfig }) {
                 <input name="runOfficialValidationWorker" type="checkbox" checked={settings.runOfficialValidationWorker} onChange={updateSetting} />
               </SettingsRow>
               <button className="settings-primary-button" type="button" onClick={saveSettings}>Save Local GMAT</button>
+            </SettingsSection>
+          ) : null}
+
+          {activeSection === "updates" ? (
+            <SettingsSection
+              title="Application Updates"
+              description="Installed builds check GitHub Releases. Updates are downloaded only after confirmation and installed after a safe restart."
+            >
+              <SettingsRow label="Installed version">
+                <span>{updateStatus?.currentVersion ?? "Unknown"}</span>
+              </SettingsRow>
+              <SettingsRow label="Update status">
+                <span>{updateStatus?.message ?? "Update service is starting…"}</span>
+              </SettingsRow>
+              {updateStatus?.state === "downloading" ? (
+                <SettingsRow label="Download progress">
+                  <progress max="100" value={updateStatus.percent ?? 0} />
+                </SettingsRow>
+              ) : null}
+              <button className="settings-primary-button" type="button" onClick={checkForUpdates}>
+                Check for Updates
+              </button>
             </SettingsSection>
           ) : null}
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ..models import Scenario
+from ..models.entities import utc_now
 from ..repositories import scenario_repository
 from ..schemas.scenario import ScenarioCreate, ScenarioUpdate
 
@@ -76,6 +77,7 @@ def update_scenario(
     scenario.description = payload.description.strip()
     scenario.scenario_json = definition
     scenario.schema_version = definition["schemaVersion"]
+    scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
     session.commit()
     return _serialize(scenario)
@@ -90,6 +92,7 @@ def set_scenario_status(
     if scenario is None:
         return None
     scenario.status = status
+    scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
     session.commit()
     return _serialize(scenario)

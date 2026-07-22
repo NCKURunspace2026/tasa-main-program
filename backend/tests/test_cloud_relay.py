@@ -8,14 +8,15 @@ def setup_module():
     initialize_database()
 
 
-def test_cloud_backend_is_the_authoritative_api():
+def test_local_backend_is_authoritative_and_cloud_is_optional():
     with TestClient(app) as client:
         health = client.get("/health")
         scenarios = client.get("/api/scenarios")
 
     assert health.status_code == 200
-    assert health.json()["cloudBackend"] == "ready"
-    assert health.json()["database"] == "sqlite-development"
+    assert health.json()["cloudBackend"] == "optional"
+    assert health.json()["database"] == "sqlite"
+    assert health.json()["nodeRole"] == "local"
     assert scenarios.status_code == 200
     assert scenarios.json()["items"][0]["scenarioId"] == "SC-001"
 

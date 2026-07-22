@@ -99,7 +99,7 @@ function GmatFirstRunSetup({ onComplete }) {
         </div>
         {message ? <p className="first-run-message">{message}</p> : null}
         <button className="first-run-primary" type="submit">Save and continue</button>
-        <p className="first-run-help">Submissions are sent to the configured FastAPI Cloud backend.</p>
+        <p className="first-run-help">Submissions are saved in this device's local SQLite database first.</p>
       </form>
     </main>
   );

@@ -5,18 +5,21 @@ const crypto = require("node:crypto");
 const { createConfigStore, resolveGmatInstallation } = require("./main/configStore.cjs");
 const { validateSubmission } = require("./main/validationService.cjs");
 const { createValidationWorker } = require("./main/validationWorker.cjs");
+const { startLocalBackend } = require("./main/localBackend.cjs");
+const { createAppUpdater } = require("./main/appUpdater.cjs");
 
 const developmentRendererUrl = process.env.ELECTRON_RENDERER_URL || (
   app.isPackaged ? null : "http://127.0.0.1:5173"
 );
-const cloudApiBaseUrl = (
+const relayApiBaseUrl = (
   process.env.MISSION_DASHBOARD_API_BASE_URL
   ?? "https://missiondashboard.fastapicloud.dev/api"
 ).replace(/\/$/, "");
 let validationWorker = null;
 let configStore = null;
+let localBackend = null;
 
-function createWindow() {
+function createWindow(localApiBaseUrl) {
   const iconPath = app.isPackaged
     ? path.join(__dirname, "..", "dist", "Team-Logo.png")
     : path.join(__dirname, "..", "public", "Team-Logo.png");
@@ -32,7 +35,10 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  const runtimeParams = new URLSearchParams({ runtimeRole: "client" });
+  const runtimeParams = new URLSearchParams({
+    runtimeRole: "client",
+    apiBaseUrl: localApiBaseUrl,
+  });
   if (developmentRendererUrl) {
     window.loadURL(`${developmentRendererUrl}?${runtimeParams.toString()}`);
   } else {
@@ -49,11 +55,20 @@ app.whenReady().then(async () => {
   if (process.platform === "darwin" && fs.existsSync(appIconPath)) {
     app.dock.setIcon(nativeImage.createFromPath(appIconPath));
   }
+  configStore = createConfigStore(app);
+  localBackend = await startLocalBackend({ app });
+  const localApiBaseUrl = localBackend.apiBaseUrl;
   ipcMain.handle("runtime:get-config", () => ({
     role: configStore?.read().runOfficialValidationWorker ? "worker" : "client",
-    cloudApiBaseUrl,
+    localApiBaseUrl,
+    relayApiBaseUrl,
   }));
-  configStore = createConfigStore(app);
+  createAppUpdater({
+    app,
+    dialog,
+    ipcMain,
+    getWindows: () => BrowserWindow.getAllWindows(),
+  });
 
   function syncValidationWorker() {
     const currentConfig = configStore.read();
@@ -66,7 +81,7 @@ app.whenReady().then(async () => {
     const workerId = currentConfig.workerId ?? `GMAT-${crypto.randomUUID()}`;
     if (!currentConfig.workerId) configStore.write({ workerId });
     validationWorker = createValidationWorker({
-      apiBaseUrl: cloudApiBaseUrl,
+      apiBaseUrl: localApiBaseUrl,
       workerId,
       readConfig: () => configStore.read(),
     });
@@ -77,7 +92,7 @@ app.whenReady().then(async () => {
     if (!/^\/(?:scenarios|solutions|data)(?:\/|$)/.test(pathName)) {
       throw new Error("This administration request is not allowed.");
     }
-    const response = await fetch(`${cloudApiBaseUrl}${pathName}`, {
+    const response = await fetch(`${localApiBaseUrl}${pathName}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -85,7 +100,7 @@ app.whenReady().then(async () => {
       },
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(payload?.detail ?? `Cloud request failed (${response.status}).`);
+    if (!response.ok) throw new Error(payload?.detail ?? `Local request failed (${response.status}).`);
     return payload;
   });
   ipcMain.handle("gmat:get-config", () => configStore.read());
@@ -106,7 +121,11 @@ app.whenReady().then(async () => {
     const config = configStore.read();
     return validateSubmission({ ...request, executablePath: config.executablePath, timeoutMs: Number(config.timeoutMs ?? 120000), keepTemporaryFiles: Boolean(config.keepTemporaryFiles) });
   });
-  createWindow();
+  createWindow(localApiBaseUrl);
+}).catch((error) => {
+  console.error(`[startup] ${error.stack ?? error.message}`);
+  dialog.showErrorBox("Mission Dashboard could not start", error.message);
+  app.quit();
 });
 
 app.on("window-all-closed", () => {
@@ -115,4 +134,5 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   validationWorker?.stop();
+  localBackend?.process?.kill();
 });

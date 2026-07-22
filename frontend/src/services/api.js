@@ -1,15 +1,16 @@
 const API_BASE_STORAGE_KEY = "mission-dashboard-api-base-url";
-const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "https://missiondashboard.fastapicloud.dev/api";
+const RELAY_ADDRESS_STORAGE_KEY = "mission-dashboard-relay-address";
+const runtimeApiBaseUrl = new URLSearchParams(window.location.search).get("apiBaseUrl");
+const DEFAULT_API_BASE_URL = runtimeApiBaseUrl
+  ?? import.meta.env.VITE_API_BASE_URL
+  ?? "http://127.0.0.1:8000/api";
+const DEFAULT_RELAY_ADDRESS = "https://missiondashboard.fastapicloud.dev";
 
 function getStoredApiBaseUrl() {
   if (typeof window === "undefined") return DEFAULT_API_BASE_URL;
+  if (runtimeApiBaseUrl) return runtimeApiBaseUrl;
   const storedApiBaseUrl = window.localStorage.getItem(API_BASE_STORAGE_KEY);
-  const isRemovedLocalServer = import.meta.env.PROD && (
-    storedApiBaseUrl?.startsWith("http://127.0.0.1:8000")
-    || storedApiBaseUrl?.startsWith("http://localhost:8000")
-  );
-  if (!storedApiBaseUrl || isRemovedLocalServer) {
+  if (!storedApiBaseUrl) {
     window.localStorage.setItem(API_BASE_STORAGE_KEY, DEFAULT_API_BASE_URL);
     return DEFAULT_API_BASE_URL;
   }
@@ -27,12 +28,12 @@ function normalizeCloudAddress(cloudAddress) {
 }
 
 export function getCloudAddress() {
-  return getStoredApiBaseUrl().replace(/\/api$/, "");
+  return window.localStorage.getItem(RELAY_ADDRESS_STORAGE_KEY) ?? DEFAULT_RELAY_ADDRESS;
 }
 
 export function setCloudAddress(cloudAddress) {
   const apiBaseUrl = normalizeCloudAddress(cloudAddress);
-  window.localStorage.setItem(API_BASE_STORAGE_KEY, apiBaseUrl);
+  window.localStorage.setItem(RELAY_ADDRESS_STORAGE_KEY, apiBaseUrl.replace(/\/api$/, ""));
   return apiBaseUrl.replace(/\/api$/, "");
 }
 
@@ -43,14 +44,30 @@ export async function testCloudConnection(cloudAddress) {
   const response = await fetch(healthUrl);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status !== "ok") {
-    throw new Error("FastAPI Cloud health check failed.");
+    throw new Error("Relay health check failed.");
   }
   return {
     latencyMs: Math.round(performance.now() - startedAt),
     validationProvider: payload.validationProvider,
     validationWorker: payload.validationWorker,
     physicalValidation: payload.physicalValidation,
+    nodeRole: payload.nodeRole,
   };
+}
+
+export function getSyncSettings() {
+  return request("/sync/settings");
+}
+
+export function updateSyncSettings(settings) {
+  return request("/sync/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export function runDataSync() {
+  return request("/sync/run", { method: "POST" });
 }
 
 async function request(path, options = {}) {
