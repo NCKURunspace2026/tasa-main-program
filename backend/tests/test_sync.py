@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal, reset_database
+from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
 from app.models import Base, Solution, Submission
 from app.services.sync_service import build_records, find_record, import_records
@@ -33,6 +33,7 @@ def submission_payload():
 
 
 def setup_function():
+    initialize_database()
     with SessionLocal() as session:
         reset_database(session)
 

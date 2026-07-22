@@ -154,6 +154,27 @@
   font-weight: 700;
 }
 
+.solution-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.solution-remove-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.06);
+  color: #fca5a5;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.solution-remove-button:disabled { opacity: 0.55; cursor: not-allowed; }
+
 .solution-detail-content {
   padding-top: 18px;
 }
@@ -250,6 +271,8 @@
   .decision-summary {
     grid-template-columns: 1fr;
   }
+  .solution-detail-header { align-items: flex-start; }
+  .solution-detail-actions { align-items: flex-end; flex-direction: column; }
 }
 
 /* ========================================

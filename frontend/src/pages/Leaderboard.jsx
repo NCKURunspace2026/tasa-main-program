@@ -4,7 +4,7 @@ import "./Leaderboard.css";
 
 import PageHeader from "../components/PageHeader.jsx";
 import useScenarios from "../hooks/useScenarios.js";
-import { getLeaderboard, getSolutionDetail } from "../services/api.js";
+import { deleteSolution, getLeaderboard, getSolutionDetail } from "../services/api.js";
 
 import { Table, pixel } from "@astryxdesign/core/Table";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
@@ -35,7 +35,10 @@ export default function Leaderboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [detailError, setDetailError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [isRemoving, setIsRemoving] = useState(false);
   const detailRef = useRef(null);
+  const skipAutoSelectionRef = useRef(false);
 
   useEffect(() => {
     if (
@@ -61,9 +64,10 @@ export default function Leaderboard() {
       .then((result) => {
         if (!isCurrent) return;
         setLeaderboard(result);
-        if (!selectedSolutionId && result.items.length > 0) {
+        if (!selectedSolutionId && result.items.length > 0 && !skipAutoSelectionRef.current) {
           setSelectedSolutionId(result.items[0].solutionId);
         }
+        skipAutoSelectionRef.current = false;
       })
       .catch((requestError) => {
         if (isCurrent) setError(requestError.message);
@@ -75,7 +79,7 @@ export default function Leaderboard() {
     return () => {
       isCurrent = false;
     };
-  }, [scenarioId, search, selectedSolutionId]);
+  }, [scenarioId, search, selectedSolutionId, refreshVersion]);
 
   useEffect(() => {
     if (!selectedSolutionId) {
@@ -184,6 +188,29 @@ export default function Leaderboard() {
     setSelectedSolution(null);
   }
 
+  async function removeSelectedSolution() {
+    if (!selectedSolution || isRemoving) return;
+    if (!window.confirm(
+      `Remove ${selectedSolution.solutionId} from the Leaderboard? Its Solution and Submission data remain stored for export and Machine Learning.`,
+    )) return;
+    setIsRemoving(true);
+    setDetailError("");
+    try {
+      await deleteSolution(selectedSolution.solutionId);
+      skipAutoSelectionRef.current = true;
+      setSelectedSolutionId(null);
+      setSelectedSolution(null);
+      const params = new URLSearchParams(window.location.search);
+      params.delete("solutionId");
+      window.history.replaceState({}, "", `?${params.toString()}`);
+      setRefreshVersion((value) => value + 1);
+    } catch (requestError) {
+      setDetailError(requestError.message);
+    } finally {
+      setIsRemoving(false);
+    }
+  }
+
   return (
     <section className="leaderboard-page">
       <PageHeader
@@ -235,7 +262,14 @@ export default function Leaderboard() {
             <p className="submission-panel-eyebrow">Selected solution</p>
             <h2>{selectedSolution?.solutionId ?? "Solution Details"}</h2>
           </div>
-          {selectedSolution ? <span className="solution-detail-status">Validated</span> : null}
+          {selectedSolution ? (
+            <div className="solution-detail-actions">
+              <span className="solution-detail-status">Validated</span>
+              <button className="solution-remove-button" type="button" onClick={removeSelectedSolution} disabled={isRemoving}>
+                {isRemoving ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          ) : null}
         </header>
 
         {detailError ? <div className="leaderboard-request-state is-error">{detailError}</div> : null}
