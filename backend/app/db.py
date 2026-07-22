@@ -2,11 +2,12 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
-from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base, Scenario
+from .models import Base, Scenario, SyncEvent, SyncRelayState
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +60,6 @@ def get_db():
 
 def initialize_database() -> None:
     Base.metadata.create_all(engine)
-    _add_queue_lease_columns_for_existing_database()
     _add_soft_delete_columns_for_existing_database()
     _add_sync_columns_for_existing_database()
     with SessionLocal.begin() as session:
@@ -90,6 +90,7 @@ def initialize_database() -> None:
             # Migrate the original SC-001 propagation defaults without
             # overwriting limits that a Server operator has already customized.
             scenario_definition = dict(scenario.scenario_json)
+            definition_changed = False
             propagator = dict(scenario_definition.get("propagator", {}))
             if (
                 propagator.get("initialStepSec") == 60.0
@@ -98,7 +99,21 @@ def initialize_database() -> None:
                 propagator["initialStepSec"] = 1.0
                 propagator["maxStepSec"] = 1.0
                 scenario_definition["propagator"] = propagator
+                definition_changed = True
+            spacecraft = dict(scenario_definition.get("spacecraft", {}))
+            packaged_spacecraft = definition.get("spacecraft", {})
+            for role in ("target", "chaser"):
+                role_definition = dict(spacecraft.get(role, {}))
+                if "physicalProperties" not in role_definition:
+                    role_definition["physicalProperties"] = packaged_spacecraft[role][
+                        "physicalProperties"
+                    ]
+                    spacecraft[role] = role_definition
+                    definition_changed = True
+            if definition_changed:
+                scenario_definition["spacecraft"] = spacecraft
                 scenario.scenario_json = scenario_definition
+                scenario.updated_at = datetime.now(timezone.utc)
         session.query(Scenario).filter(Scenario.status != "active").update(
             {
                 Scenario.status: "active",
@@ -106,27 +121,11 @@ def initialize_database() -> None:
             },
             synchronize_session=False,
         )
-
-
-def _add_queue_lease_columns_for_existing_database() -> None:
-    """Small forward-only migration for existing local databases.
-
-    A full migration framework can replace this once the schema grows.
-    """
-    existing = {column["name"] for column in inspect(engine).get_columns("submissions")}
-    additions = {
-        "claimed_at": "TIMESTAMP",
-        "lease_expires_at": "TIMESTAMP",
-        "claimed_by_worker_id": "VARCHAR(96)",
-        "claim_token": "VARCHAR(64)",
-        "attempt_count": "INTEGER NOT NULL DEFAULT 0",
-    }
-    with engine.begin() as connection:
-        for name, data_type in additions.items():
-            if name not in existing:
-                connection.execute(text(
-                    f"ALTER TABLE submissions ADD COLUMN {name} {data_type}"
-                ))
+        if session.get(SyncRelayState, 1) is None:
+            session.add(SyncRelayState(id=1, generation_id=uuid4().hex))
+        if session.query(SyncEvent).count() == 0:
+            for scenario_id in session.scalars(select(Scenario.id)).all():
+                session.add(SyncEvent(record_type="scenario", record_id=scenario_id))
 
 
 def _add_soft_delete_columns_for_existing_database() -> None:
@@ -148,6 +147,20 @@ def _add_sync_columns_for_existing_database() -> None:
                 ))
                 connection.execute(text(
                     f"UPDATE {table_name} SET updated_at = created_at WHERE updated_at IS NULL"
+                ))
+    sync_setting_columns = {
+        column["name"] for column in inspect(engine).get_columns("sync_settings")
+    }
+    additions = {
+        "last_pushed_at": "TIMESTAMP",
+        "remote_cursor": "INTEGER NOT NULL DEFAULT 0",
+        "remote_generation": "VARCHAR(64)",
+    }
+    with engine.begin() as connection:
+        for name, data_type in additions.items():
+            if name not in sync_setting_columns:
+                connection.execute(text(
+                    f"ALTER TABLE sync_settings ADD COLUMN {name} {data_type}"
                 ))
 
 

@@ -1,32 +1,11 @@
+import math
+
 from fastapi.testclient import TestClient
 
 from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
 
-WORKER_HEADERS = {}
-WORKER_ID = "test-central-gmat-worker"
-
-
-def submission_payload():
-    return {
-        "schemaVersion": 2,
-        "scenarioId": "SC-001",
-        "solution": {
-            "name": "Manual Test 01",
-            "decisionVariables": {
-                "tWait": 0,
-                "burns": [{"deltaV": [0.1, 0.2, 0.3]}],
-                "finalCoastTime": 5000,
-            },
-        },
-        "clientValidation": {
-            "passed": True,
-            "provider": "local-gmat-console",
-            "minimumDistanceKm": 4.8,
-            "missionTimeSec": 5000,
-            "totalDeltaVKmPerSec": 0.374,
-        },
-    }
+ADMIN_HEADERS = {"X-Mission-Dashboard-Admin-Token": "test-admin-token"}
 
 
 def scenario_json():
@@ -34,10 +13,26 @@ def scenario_json():
         "schemaVersion": 1,
         "epoch": {"value": "2026-08-29T05:00:00Z", "timeSystem": "UTC"},
         "coordinateSystem": "EarthMJ2000Eq",
-        "spacecraft": {"target": {}, "chaser": {}},
+        "spacecraft": {
+            "target": {"positionKm": [7000, 0, 0], "velocityKmPerSec": [0, 7.5, 0]},
+            "chaser": {"positionKm": [6990, 0, 0], "velocityKmPerSec": [0, 7.6, 0]},
+        },
         "forceModel": {"centralBody": "Earth"},
-        "propagator": {"integrator": "RungeKutta89"},
-        "validation": {"maximumSimulationTimeSec": 20000, "requiredFinalDistanceKm": 5},
+        "propagator": {
+            "integrator": "RungeKutta89",
+            "initialStepSec": 1,
+            "maxStepSec": 1,
+            "minStepSec": 0.001,
+            "accuracy": 1e-12,
+        },
+        "validation": {
+            "maximumMissionTimeSec": 20000,
+            "requiredFinalDistanceKm": 5,
+            "maximumTotalDeltaV": 1.5,
+            "minimumBurnCount": 1,
+            "maximumBurnCount": 5,
+            "minimumBurnSeparationSec": 100,
+        },
         "scoreConfig": {
             "distanceReferenceKm": 5,
             "distanceDecayKm": 100,
@@ -52,6 +47,29 @@ def scenario_json():
     }
 
 
+def submission_payload():
+    delta_v = [0.1, 0.2, 0.3]
+    return {
+        "schemaVersion": 2,
+        "scenarioId": "SC-001",
+        "solution": {
+            "name": "Manual Test 01",
+            "decisionVariables": {
+                "tWait": 0,
+                "burns": [{"deltaV": delta_v}],
+                "finalCoastTime": 5000,
+            },
+        },
+        "clientValidation": {
+            "passed": True,
+            "provider": "local-gmat-console",
+            "minimumDistanceKm": 4.8,
+            "missionTimeSec": 5000,
+            "totalDeltaVKmPerSec": math.hypot(*delta_v),
+        },
+    }
+
+
 def setup_module():
     initialize_database()
 
@@ -61,65 +79,34 @@ def setup_function():
         reset_database(session)
 
 
-def test_submission_is_saved_atomically_and_queued_for_central_validation():
+def test_local_gmat_result_is_scored_saved_and_ranked_without_second_worker():
     with TestClient(app) as client:
         response = client.post("/api/submissions", json=submission_payload())
-        assert response.status_code == 202
+        assert response.status_code == 201
         result = response.json()
-        assert result["submissionId"].startswith("SUB-")
-        assert result["solutionId"].startswith("SOL-")
-        assert result["status"] == "accepted"
-        assert result["queueStatus"] == "pending"
+        assert result["status"] == "passed"
+        assert result["officialResults"]["totalScore"] > 0
 
-        saved = client.get(f"/api/submissions/{result['submissionId']}")
-        assert saved.status_code == 200
-        assert saved.json()["status"] == "pending"
-        assert saved.json()["officialResults"] is None
-
+        saved = client.get(f"/api/submissions/{result['submissionId']}").json()
+        assert saved["status"] == "passed"
         leaderboard = client.get("/api/scenarios/SC-001/leaderboard").json()
-        assert leaderboard["rankingMetric"] == "totalScore"
-        assert leaderboard["total"] == 0
+        assert leaderboard["total"] == 1
+        assert leaderboard["items"][0]["solutionId"] == result["solutionId"]
 
 
-def test_client_validation_must_have_physically_passed_before_upload():
+def test_unvalidated_or_inconsistent_client_result_is_rejected():
     payload = submission_payload()
     payload["clientValidation"]["passed"] = False
     with TestClient(app) as client:
-        response = client.post("/api/submissions", json=payload)
-        assert response.status_code == 422
+        assert client.post("/api/submissions", json=payload).status_code == 422
 
-
-def test_invalid_decision_variables_do_not_create_submission():
-    payload = submission_payload()
-    payload["solution"]["decisionVariables"]["burns"] = []
-    with TestClient(app) as client:
-        response = client.post("/api/submissions", json=payload)
-        assert response.status_code == 422
+        payload = submission_payload()
+        payload["clientValidation"]["totalDeltaVKmPerSec"] = 0.1
+        assert client.post("/api/submissions", json=payload).status_code == 422
         assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 0
 
 
-def test_server_can_validate_and_publish_scenario_json():
-    payload = {
-        "scenarioId": "SC-003",
-        "name": "Rendezvous Challenge",
-        "description": "Two-spacecraft test.",
-        "scenarioJson": scenario_json(),
-    }
-    with TestClient(app) as client:
-        parsed = client.post("/api/scenarios/parse", json={"scenarioJson": scenario_json()})
-        assert parsed.status_code == 200
-        assert parsed.json()["scenarioJson"]["schemaVersion"] == 1
-
-        created = client.post(
-            "/api/scenarios",
-            json=payload,
-        )
-        assert created.status_code == 201
-        assert created.json()["scenarioId"] == "SC-003"
-        assert client.get("/api/scenarios/SC-003").status_code == 200
-
-
-def test_scenario_force_model_is_normalized_and_validated():
+def test_scenario_publish_normalizes_force_model_and_physical_properties():
     definition = scenario_json()
     definition["forceModel"] = {
         "centralBody": "Earth",
@@ -130,158 +117,49 @@ def test_scenario_force_model_is_normalized_and_validated():
         "relativisticCorrection": {"enabled": True},
     }
     with TestClient(app) as client:
-        parsed = client.post("/api/scenarios/parse", json={"scenarioJson": definition})
-        assert parsed.status_code == 200
-        force_model = parsed.json()["scenarioJson"]["forceModel"]
-        assert force_model["gravity"]["degree"] == 4
-        assert force_model["pointMasses"] == ["Sun", "Luna"]
-        assert force_model["drag"]["model"] == "JacchiaRoberts"
-
-        definition["forceModel"]["gravity"]["order"] = 5
-        invalid = client.post("/api/scenarios/parse", json={"scenarioJson": definition})
-        assert invalid.status_code == 422
-
-
-def test_only_server_can_update_published_scenario_limits():
-    with TestClient(app) as client:
-        current = client.get("/api/scenarios/SC-001").json()
-        definition = current["scenarioJson"]
-        original_max_step = definition["propagator"]["maxStepSec"]
-        definition["propagator"]["maxStepSec"] = 1.0
-        payload = {
-            "name": current["name"],
-            "description": current["description"],
+        created = client.post("/api/scenarios", json={
+            "scenarioId": "SC-003",
+            "name": "Rendezvous Challenge",
+            "description": "Two-spacecraft test.",
             "scenarioJson": definition,
-        }
+        })
+        assert created.status_code == 201
+        saved = created.json()["scenarioJson"]
+        assert saved["forceModel"]["gravity"]["degree"] == 4
+        assert saved["forceModel"]["pointMasses"] == ["Sun", "Luna"]
+        assert saved["spacecraft"]["chaser"]["physicalProperties"]["dryMassKg"] == 850
 
-        updated = client.put(
-            "/api/scenarios/SC-001",
-            json=payload,
-        )
-        assert updated.status_code == 200
-        assert updated.json()["scenarioJson"]["propagator"]["maxStepSec"] == 1.0
-
-        definition["propagator"]["maxStepSec"] = original_max_step
-        restored = client.put(
-            "/api/scenarios/SC-001",
-            json=payload,
-        )
-        assert restored.status_code == 200
+        invalid = scenario_json()
+        invalid["propagator"]["minStepSec"] = 2
+        response = client.post("/api/scenarios", json={
+            "scenarioId": "SC-004",
+            "name": "Invalid",
+            "scenarioJson": invalid,
+        })
+        assert response.status_code == 422
 
 
-def test_health_does_not_claim_unconfigured_physical_validation():
+def test_scenario_inactive_and_parse_compatibility_routes_are_removed():
     with TestClient(app) as client:
-        health = client.get("/health").json()
-        assert health["validationWorker"] == "offline"
-        assert health["physicalValidation"] is False
+        assert client.delete("/api/scenarios/SC-001").status_code == 405
+        assert client.post("/api/scenarios/SC-001/restore").status_code == 404
+        assert client.post("/api/scenarios/parse", json={"scenarioJson": scenario_json()}).status_code == 405
 
 
-def test_central_worker_claims_scores_and_publishes_passed_submission():
-    scenario_payload = {
-        "scenarioId": "SC-003",
-        "name": "Scored Challenge",
-        "description": "Central worker integration test.",
-        "scenarioJson": scenario_json(),
-    }
+def test_solution_archive_is_excluded_from_ml_export_unless_explicitly_requested():
     with TestClient(app) as client:
-        assert client.post(
-            "/api/scenarios",
-            headers=WORKER_HEADERS,
-            json=scenario_payload,
-        ).status_code == 201
-
-        payload = submission_payload()
-        payload["scenarioId"] = "SC-003"
-        accepted = client.post("/api/submissions", json=payload).json()
-
-        claimed = client.post(
-            "/api/internal/validation/next",
-            headers=WORKER_HEADERS,
-            json={"workerId": WORKER_ID},
-        ).json()["item"]
-        assert claimed["submissionId"] == accepted["submissionId"]
-        assert claimed["decisionVariables"]["burns"][0]["deltaV"] == [0.1, 0.2, 0.3]
-
-        completed = client.post(
-            f"/api/internal/validation/{accepted['submissionId']}/result",
-            headers=WORKER_HEADERS,
-            json={
-                "status": "passed",
-                "workerId": WORKER_ID,
-                "claimToken": claimed["claimToken"],
-                "provider": "official-gmat-console",
-                "minimumDistanceKm": 4.8,
-                "missionTimeSec": 5000,
-                "totalDeltaVKmPerSec": 0.374,
-                "penaltyScore": 0,
-            },
-        )
-        assert completed.status_code == 200
-        assert completed.json()["status"] == "passed"
-        assert completed.json()["totalScore"] > 50
-
-        leaderboard = client.get("/api/scenarios/SC-003/leaderboard").json()
-        assert leaderboard["total"] == 1
-        assert leaderboard["items"][0]["solutionId"] == accepted["solutionId"]
-
-
-def test_soft_delete_hides_records_but_keeps_archives_and_exports():
-    with TestClient(app) as client:
-        accepted = client.post("/api/submissions", json=submission_payload()).json()
-        claimed = client.post(
-            "/api/internal/validation/next",
-            json={"workerId": WORKER_ID},
-        ).json()["item"]
-        assert client.post(
-            f"/api/internal/validation/{accepted['submissionId']}/result",
-            json={
-                "status": "passed",
-                "workerId": WORKER_ID,
-                "claimToken": claimed["claimToken"],
-                "provider": "official-gmat-console",
-                "minimumDistanceKm": 4.8,
-                "missionTimeSec": 5000,
-                "totalDeltaVKmPerSec": 0.374,
-                "penaltyScore": 0,
-            },
-        ).status_code == 200
-
-        solution_id = accepted["solutionId"]
-        assert client.delete(f"/api/solutions/{solution_id}").status_code == 200
+        result = client.post("/api/submissions", json=submission_payload()).json()
+        solution_id = result["solutionId"]
+        assert client.delete(f"/api/solutions/{solution_id}").status_code == 403
+        assert client.delete(f"/api/solutions/{solution_id}", headers=ADMIN_HEADERS).status_code == 200
         assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 0
         assert client.get(f"/api/solutions/{solution_id}").status_code == 404
-
-        archived = client.get(
-            "/api/solutions?scenarioId=SC-001&includeDeleted=true"
-        ).json()["items"]
-        assert archived[0]["solutionId"] == solution_id
-        assert archived[0]["deletedAt"] is not None
-
-        jsonl_export = client.get("/api/data/export?format=jsonl")
-        csv_export = client.get("/api/data/export?format=csv")
-        assert solution_id in jsonl_export.text
-        assert solution_id in csv_export.text
-        assert client.post(f"/api/solutions/{solution_id}/restore").status_code == 200
-        assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 1
-
-        assert client.delete("/api/scenarios/SC-001").status_code == 409
-        active = client.get("/api/scenarios").json()["items"]
-        assert active[0]["status"] == "active"
-        assert client.post("/api/scenarios/SC-001/restore").status_code == 200
-
-
-def test_worker_heartbeat_controls_health_truthfully():
-    with TestClient(app) as client:
-        heartbeat = client.post(
-            "/api/internal/validation/heartbeat",
-            headers=WORKER_HEADERS,
-            json={
-                "workerId": WORKER_ID,
-                "provider": "official-gmat-console",
-                "gmatConfigured": True,
-            },
-        )
-        assert heartbeat.status_code == 200
-        health = client.get("/health").json()
-        assert health["validationWorker"] == "ready"
-        assert health["physicalValidation"] is True
+        assert solution_id not in client.get("/api/data/export?format=jsonl").text
+        assert solution_id not in client.get("/api/data/export?format=csv").text
+        assert solution_id in client.get(
+            "/api/data/export?format=jsonl&includeArchived=true"
+        ).text
+        assert solution_id in client.get(
+            "/api/data/export?format=csv&includeArchived=true"
+        ).text
+        assert client.post(f"/api/solutions/{solution_id}/restore").status_code == 404

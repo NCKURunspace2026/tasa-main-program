@@ -13,12 +13,26 @@
       "target": {
         "stateType": "Cartesian",
         "positionKm": [7000, 0, 0],
-        "velocityKmPerSec": [0, 7.546, 0]
+        "velocityKmPerSec": [0, 7.546, 0],
+        "physicalProperties": {
+          "dryMassKg": 850,
+          "dragAreaM2": 15,
+          "srpAreaM2": 1,
+          "coefficientOfDrag": 2.2,
+          "coefficientOfReflectivity": 1.8
+        }
       },
       "chaser": {
         "stateType": "Cartesian",
         "positionKm": [6900, 0, 0],
-        "velocityKmPerSec": [0, 7.6, 0]
+        "velocityKmPerSec": [0, 7.6, 0],
+        "physicalProperties": {
+          "dryMassKg": 850,
+          "dragAreaM2": 15,
+          "srpAreaM2": 1,
+          "coefficientOfDrag": 2.2,
+          "coefficientOfReflectivity": 1.8
+        }
       }
     },
     "forceModel": {
@@ -42,8 +56,12 @@
       "accuracy": 1e-12
     },
     "validation": {
-      "maximumSimulationTimeSec": 20000,
-      "requiredFinalDistanceKm": 5
+      "requiredFinalDistanceKm": 5,
+      "maximumTotalDeltaV": 1.5,
+      "maximumMissionTimeSec": 20000,
+      "minimumBurnCount": 1,
+      "maximumBurnCount": 5,
+      "minimumBurnSeparationSec": 100
     },
     "scoreConfig": {
       "distanceReferenceKm": 5,

@@ -20,18 +20,18 @@ flowchart LR
 
 核心原則：
 
-1. 所有寫入先提交到目前裝置的 SQLite，離線仍能工作。
-2. 每 60 秒或由 Settings 的 `Sync Now` 主動同步。
-3. 同步資料只有 Scenario 與 GMAT 正式驗證通過的 Solution。
-4. `pending`、`failed`、系統錯誤及 Worker heartbeat 只留在產生它的裝置。
-5. 同步紀錄包含版本時間與 SHA-256 內容雜湊，可去重、續傳及檢查毀損。
-6. Relay Cache 遺失時，任何完整本地節點都能重新上傳，因此 Cloud 不是備份。
+1. 每筆答案只在提交裝置執行一次本機 GMAT；通過後由本機 FastAPI 計分並寫入 SQLite。
+2. 每 60 秒、每次成功提交後，或由 Settings 的 `Sync Now` 主動同步。
+3. 裝置只 POST 自上次同步後新增或更新的 Scenario／passed Solution。
+4. Relay 為每次變更建立遞增 cursor；其他裝置只批次拉取 cursor 之後的資料。
+5. 同步紀錄包含版本時間與 SHA-256 內容雜湊，可去重與檢查毀損。
+6. Relay Cache 遺失時 generation 會改變，裝置自動執行一次完整回填；Cloud 不是備份。
 
 ## 一致性邊界
 
 這是低併發的 Eventually Consistent（最終一致）研究資料系統，不是多人即時共同編輯系統。同一個 Scenario 同一時間只應由一台裝置修改；Solution 使用全域隨機 ID，通過後視為不可變資料，只允許同步封存狀態。
 
-若完全沒有持久化雲端儲存，兩台從未同時／先後接觸到同一個 Relay Cache 的裝置，無法憑空取得彼此資料。因此正式運作至少要有一台常駐 Seed Node（種子節點）定期同步；Cloud 快取被重建後由 Seed Node 回填。
+若完全沒有持久化雲端儲存，兩台從未先後接觸到同一個 Relay generation 的裝置，無法憑空取得彼此資料。因此正式運作至少要有一台常駐 Seed Node（種子節點）定期同步；Cloud 快取被重建後由 Seed Node 回填。
 
 ## 本地資料
 
@@ -40,6 +40,10 @@ Electron 啟動時會一併啟動打包的 FastAPI sidecar，並把資料放在 
 - Write-Ahead Logging（WAL，預寫式日誌）
 - Foreign Key（外鍵）檢查
 - 5 秒 busy timeout
+
+Settings → Security 可設定裝置管理密碼。排行榜的 Remove 必須先通過 Electron 內的 salted-hash 密碼驗證，且本機 FastAPI DELETE 另要求每次啟動隨機產生的內部 token；密碼明文不會寫入設定檔。
+
+一般 JSONL／CSV 資料匯出預設排除 archived Solutions，避免已知有問題的資料進入 ML dataset；只有人工勾選 Include archived records 時才會匯出供稽核或復原。
 
 本地手動開發：
 
@@ -75,7 +79,7 @@ curl https://missiondashboard.fastapicloud.dev/health
 curl https://missiondashboard.fastapicloud.dev/api/sync/manifest
 ```
 
-`/health` 應顯示 `database: "sqlite"`、`nodeRole: "relay"`、`cloudBackend: "relay-cache"`。每台 Electron 在 Settings 勾選同步並使用相同 Relay 地址即可。
+`/health` 應顯示 `database: "sqlite"`、`nodeRole: "relay"`、`cloudBackend: "relay-cache"`。Relay 只公開 health 與 sync 路由，不公開 Submission、Leaderboard、Scenario Administration 或資料匯出。每台 Electron 在 Settings 勾選同步並使用相同 Relay 地址即可。
 
 FastAPI Cloud 會自動更換執行個體，因此它的本機 SQLite 只能視為可丟失快取。若未來要保證所有裝置即使長期錯開上線仍能同步，應將 Relay 指向一台常駐 Seed Node，或新增小型持久化物件儲存；不能只依賴 Cloud 執行個體的本機檔案。
 

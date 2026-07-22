@@ -402,3 +402,9 @@
   .scenario-parameter-grid { grid-template-columns: 1fr; }
   .scenario-schema-guide > div { grid-template-columns: 1fr; gap: 4px; }
 }
+.settings-section-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}

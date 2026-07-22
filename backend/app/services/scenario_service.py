@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+import re
+
 from sqlalchemy.orm import Session
 
 from ..models import Scenario
@@ -22,6 +25,55 @@ CELESTIAL_BODIES = {
 }
 ATMOSPHERE_MODELS = {"JacchiaRoberts", "MSISE90"}
 INTEGRATORS = {"RungeKutta89", "PrinceDormand78", "RungeKutta68", "RungeKutta56"}
+
+
+def _finite_number(value: object, label: str, *, minimum: float | None = None) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as error:
+        raise InvalidScenarioError(f"{label} must be numeric.") from error
+    if not math.isfinite(number) or (minimum is not None and number < minimum):
+        qualifier = f" and at least {minimum}" if minimum is not None else ""
+        raise InvalidScenarioError(f"{label} must be finite{qualifier}.")
+    return number
+
+
+def _normalize_spacecraft(value: object, role: str) -> dict:
+    if not isinstance(value, dict):
+        raise InvalidScenarioError(f"spacecraft.{role} must be a JSON object.")
+    position = value.get("positionKm")
+    velocity = value.get("velocityKmPerSec")
+    if position is None or velocity is None:
+        legacy = value.get("initialState", {})
+        position = legacy.get("position") if isinstance(legacy, dict) else None
+        velocity = legacy.get("velocity") if isinstance(legacy, dict) else None
+    vectors = ((position, "positionKm"), (velocity, "velocityKmPerSec"))
+    for vector, label in vectors:
+        if not isinstance(vector, list) or len(vector) != 3:
+            raise InvalidScenarioError(f"spacecraft.{role}.{label} must contain three values.")
+        for index, component in enumerate(vector):
+            _finite_number(component, f"spacecraft.{role}.{label}[{index}]")
+    properties = value.get("physicalProperties", {})
+    if not isinstance(properties, dict):
+        raise InvalidScenarioError(f"spacecraft.{role}.physicalProperties must be an object.")
+    defaults = {
+        "dryMassKg": 850.0,
+        "dragAreaM2": 15.0,
+        "srpAreaM2": 1.0,
+        "coefficientOfDrag": 2.2,
+        "coefficientOfReflectivity": 1.8,
+    }
+    normalized_properties = {
+        key: _finite_number(
+            properties.get(key, default),
+            f"spacecraft.{role}.physicalProperties.{key}",
+            minimum=0,
+        )
+        for key, default in defaults.items()
+    }
+    if any(value <= 0 for value in normalized_properties.values()):
+        raise InvalidScenarioError(f"spacecraft.{role} physical properties must be positive.")
+    return {**value, "physicalProperties": normalized_properties}
 
 
 def _normalize_force_model(value: object) -> dict:
@@ -95,6 +147,8 @@ def _normalize_force_model(value: object) -> dict:
 
 
 def normalize_scenario(definition: dict) -> dict:
+    if not isinstance(definition, dict):
+        raise InvalidScenarioError("Scenario JSON must be an object.")
     required = (
         "epoch", "coordinateSystem", "spacecraft", "forceModel",
         "propagator", "validation", "scoreConfig",
@@ -103,10 +157,30 @@ def normalize_scenario(definition: dict) -> dict:
     if missing:
         raise InvalidScenarioError(f"Scenario JSON is missing: {', '.join(missing)}.")
     spacecraft = definition.get("spacecraft", {})
-    if not all(role in spacecraft for role in ("target", "chaser")):
+    if not isinstance(spacecraft, dict) or not all(role in spacecraft for role in ("target", "chaser")):
         raise InvalidScenarioError("Scenario must define target and chaser spacecraft.")
+    normalized_spacecraft = {
+        "target": _normalize_spacecraft(spacecraft["target"], "target"),
+        "chaser": _normalize_spacecraft(spacecraft["chaser"], "chaser"),
+    }
+    epoch = definition.get("epoch")
+    epoch_value = epoch.get("value") if isinstance(epoch, dict) else epoch
+    if not isinstance(epoch_value, str) or not epoch_value.strip():
+        raise InvalidScenarioError("Scenario epoch must contain a non-empty UTC value.")
+    coordinate_system = definition.get("coordinateSystem")
+    if not isinstance(coordinate_system, str) or not re.fullmatch(
+        r"[A-Za-z][A-Za-z0-9_]*", coordinate_system
+    ):
+        raise InvalidScenarioError("Scenario coordinateSystem is invalid.")
     normalized = dict(definition)
-    normalized["schemaVersion"] = int(float(definition.get("schemaVersion", 1)))
+    try:
+        schema_version = int(float(definition.get("schemaVersion", 1)))
+    except (TypeError, ValueError) as error:
+        raise InvalidScenarioError("schemaVersion must be an integer.") from error
+    if schema_version < 1:
+        raise InvalidScenarioError("schemaVersion must be at least 1.")
+    normalized["schemaVersion"] = schema_version
+    normalized["spacecraft"] = normalized_spacecraft
     normalized["forceModel"] = _normalize_force_model(definition["forceModel"])
     propagator = definition.get("propagator")
     if not isinstance(propagator, dict):
@@ -114,11 +188,73 @@ def normalize_scenario(definition: dict) -> dict:
     integrator = propagator.get("integrator", "RungeKutta89")
     if integrator not in INTEGRATORS:
         raise InvalidScenarioError(f"Unsupported propagator integrator: {integrator}.")
-    normalized["propagator"] = {**propagator, "integrator": integrator}
+    initial_step = _finite_number(
+        propagator.get("initialStepSec", 1), "propagator.initialStepSec", minimum=0,
+    )
+    max_step = _finite_number(
+        propagator.get("maxStepSec", initial_step), "propagator.maxStepSec", minimum=0,
+    )
+    min_step = _finite_number(
+        propagator.get("minStepSec", min(initial_step, max_step)),
+        "propagator.minStepSec",
+        minimum=0,
+    )
+    accuracy = _finite_number(
+        propagator.get("accuracy", 1e-12), "propagator.accuracy", minimum=0,
+    )
+    if min(initial_step, max_step, min_step, accuracy) <= 0:
+        raise InvalidScenarioError("Propagator step sizes and accuracy must be greater than zero.")
+    if not min_step <= initial_step <= max_step:
+        raise InvalidScenarioError(
+            "Propagator steps must satisfy minStepSec <= initialStepSec <= maxStepSec."
+        )
+    normalized["propagator"] = {
+        **propagator,
+        "integrator": integrator,
+        "initialStepSec": initial_step,
+        "maxStepSec": max_step,
+        "minStepSec": min_step,
+        "accuracy": accuracy,
+    }
+
+    validation = definition.get("validation")
+    if not isinstance(validation, dict):
+        raise InvalidScenarioError("validation must be a JSON object.")
+    for key in ("requiredFinalDistanceKm", "maximumTotalDeltaV", "maximumMissionTimeSec"):
+        _finite_number(validation.get(key), f"validation.{key}", minimum=0)
+    minimum_burns_value = _finite_number(
+        validation.get("minimumBurnCount"), "validation.minimumBurnCount", minimum=1,
+    )
+    maximum_burns_value = _finite_number(
+        validation.get("maximumBurnCount"), "validation.maximumBurnCount", minimum=1,
+    )
+    if not minimum_burns_value.is_integer() or not maximum_burns_value.is_integer():
+        raise InvalidScenarioError("Burn-count limits must be integers.")
+    minimum_burns = int(minimum_burns_value)
+    maximum_burns = int(maximum_burns_value)
+    if minimum_burns > maximum_burns:
+        raise InvalidScenarioError("minimumBurnCount cannot exceed maximumBurnCount.")
+    _finite_number(
+        validation.get("minimumBurnSeparationSec"),
+        "validation.minimumBurnSeparationSec",
+        minimum=0,
+    )
+
+    score_config = definition.get("scoreConfig")
+    if not isinstance(score_config, dict):
+        raise InvalidScenarioError("scoreConfig must be a JSON object.")
+    for key in (
+        "distanceReferenceKm", "distanceDecayKm", "timeReferenceSec", "timeSlope",
+        "deltaVReferenceKmPerSec", "deltaVSlope", "distanceWeight", "timeWeight",
+        "deltaVWeight",
+    ):
+        value = _finite_number(score_config.get(key), f"scoreConfig.{key}", minimum=0)
+        if key in {"distanceDecayKm", "timeSlope", "deltaVSlope"} and value <= 0:
+            raise InvalidScenarioError(f"scoreConfig.{key} must be greater than zero.")
     return normalized
 
 
-def list_scenarios(session: Session, include_inactive: bool = False) -> list[dict]:
+def list_scenarios(session: Session) -> list[dict]:
     # Scenarios are permanent simulation definitions. Unlike Solutions, they
     # are never hidden because an empty active list creates an unusable client.
     scenarios = scenario_repository.find_all(session)
@@ -138,7 +274,6 @@ def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
         id=payload.scenarioId,
         name=payload.name.strip(),
         description=payload.description.strip(),
-        original_script=payload.originalScript,
         scenario_json=definition,
         schema_version=definition["schemaVersion"],
         status="active",
@@ -161,21 +296,6 @@ def update_scenario(
     scenario.description = payload.description.strip()
     scenario.scenario_json = definition
     scenario.schema_version = definition["schemaVersion"]
-    scenario.updated_at = utc_now()
-    scenario_repository.update(session, scenario)
-    session.commit()
-    return _serialize(scenario)
-
-
-def set_scenario_status(
-    session: Session,
-    scenario_id: str,
-    status: str,
-) -> dict | None:
-    scenario = scenario_repository.find_by_id(session, scenario_id)
-    if scenario is None:
-        return None
-    scenario.status = status
     scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
     session.commit()

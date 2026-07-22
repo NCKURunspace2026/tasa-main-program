@@ -13,11 +13,43 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
   const timeLimit = limits.maximumSimulationTimeSec
     ?? limits.maximumMissionTimeSec
     ?? limits.maximumMissionTime;
+  const minimumBurnCount = limits.minimumBurnCount;
+  const maximumBurnCount = limits.maximumBurnCount;
+  const minimumBurnSeparation = limits.minimumBurnSeparationSec;
   const constraints = [
     ["minimumDistance", propagation.minimumDistanceKm, finalDistanceLimit],
     ["totalDeltaV", totalDeltaV, deltaVLimit],
     ["totalTime", totalTime, timeLimit],
   ].filter(([, , limit]) => Number.isFinite(limit)).map(([name, value, limit]) => ({ name, value, limit, operator: "<=", satisfied: value <= limit }));
+  if (Number.isFinite(minimumBurnCount)) {
+    constraints.push({
+      name: "minimumBurnCount",
+      value: finalDecisionVariables.burns.length,
+      limit: minimumBurnCount,
+      operator: ">=",
+      satisfied: finalDecisionVariables.burns.length >= minimumBurnCount,
+    });
+  }
+  if (Number.isFinite(maximumBurnCount)) {
+    constraints.push({
+      name: "maximumBurnCount",
+      value: finalDecisionVariables.burns.length,
+      limit: maximumBurnCount,
+      operator: "<=",
+      satisfied: finalDecisionVariables.burns.length <= maximumBurnCount,
+    });
+  }
+  if (Number.isFinite(minimumBurnSeparation)) {
+    finalDecisionVariables.burns.slice(0, -1).forEach((burn, index) => {
+      constraints.push({
+        name: `burnSeparation${index + 1}`,
+        value: burn.timeToNextBurn,
+        limit: minimumBurnSeparation,
+        operator: ">=",
+        satisfied: burn.timeToNextBurn >= minimumBurnSeparation,
+      });
+    });
+  }
   return { provider: "gmat-console", status: constraints.every((item) => item.satisfied) ? "validated" : "failed", minimumDistance: propagation.minimumDistanceKm, finalDistance: propagation.finalDistanceKm, totalDeltaV, totalTime, burnCount: finalDecisionVariables.burns.length, constraints, artifacts: propagation };
 }
 module.exports = { validateSubmission };

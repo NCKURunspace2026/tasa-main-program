@@ -37,6 +37,8 @@ export default function Leaderboard() {
   const [detailError, setDetailError] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [showRemovePassword, setShowRemovePassword] = useState(false);
+  const [removePassword, setRemovePassword] = useState("");
   const detailRef = useRef(null);
   const skipAutoSelectionRef = useRef(false);
 
@@ -154,7 +156,7 @@ export default function Leaderboard() {
       },
       {
         key: "officialScore",
-        header: "Official Score",
+        header: "Local Score",
         width: pixel(130),
         renderCell: (item) => item.officialScore.toFixed(2),
       },
@@ -188,16 +190,25 @@ export default function Leaderboard() {
     setSelectedSolution(null);
   }
 
-  async function removeSelectedSolution() {
+  function removeSelectedSolution() {
     if (!selectedSolution || isRemoving) return;
     if (!window.confirm(
       `Remove ${selectedSolution.solutionId} from the Leaderboard? Its Solution and Submission data remain stored for export and Machine Learning.`,
     )) return;
+    setRemovePassword("");
+    setShowRemovePassword(true);
+  }
+
+  async function confirmRemoveSelectedSolution(event) {
+    event.preventDefault();
+    if (!selectedSolution || isRemoving) return;
     setIsRemoving(true);
     setDetailError("");
     try {
-      await deleteSolution(selectedSolution.solutionId);
+      await deleteSolution(selectedSolution.solutionId, removePassword);
       skipAutoSelectionRef.current = true;
+      setShowRemovePassword(false);
+      setRemovePassword("");
       setSelectedSolutionId(null);
       setSelectedSolution(null);
       const params = new URLSearchParams(window.location.search);
@@ -225,7 +236,7 @@ export default function Leaderboard() {
       <section className="leaderboard-panel leaderboard-table-panel">
         <header className="leaderboard-panel-header">
           <div>
-            <span className="ranking-mode-label">Official ranking</span>
+            <span className="ranking-mode-label">Locally validated ranking</span>
             <h2>Validated Solutions</h2>
           </div>
           <span className="live-status"><span className="live-status-dot" />{leaderboard.total} solutions</span>
@@ -288,6 +299,43 @@ export default function Leaderboard() {
           </>
         ) : null}
       </section>
+
+      {showRemovePassword ? (
+        <div className="leaderboard-dialog-backdrop" role="presentation">
+          <form
+            className="leaderboard-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-solution-title"
+            onSubmit={confirmRemoveSelectedSolution}
+          >
+            <p className="submission-panel-eyebrow">Protected action</p>
+            <h2 id="remove-solution-title">Enter administration password</h2>
+            <p>Remove {selectedSolution?.solutionId} from the Leaderboard. Its dataset record will remain archived.</p>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={removePassword}
+              onChange={(event) => setRemovePassword(event.target.value)}
+              autoFocus
+              required
+            />
+            {detailError ? <p className="leaderboard-dialog-error">{detailError}</p> : null}
+            <div className="leaderboard-dialog-actions">
+              <button
+                type="button"
+                onClick={() => { setShowRemovePassword(false); setRemovePassword(""); }}
+                disabled={isRemoving}
+              >
+                Cancel
+              </button>
+              <button className="solution-remove-button" type="submit" disabled={isRemoving}>
+                {isRemoving ? "Removing…" : "Confirm Remove"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -305,10 +353,10 @@ function SolutionDetailTab({ tab, detail }) {
             <MetadataListItem label="Status">{detail.status}</MetadataListItem>
           </MetadataList>
         </DetailCard>
-        <DetailCard title="Official Results">
+        <DetailCard title="Local GMAT Results">
           <MetadataList>
-            <MetadataListItem label="Official rank">{detail.officialResults.rank ?? "—"}</MetadataListItem>
-            <MetadataListItem label="Official score"><strong className="official-score-value">{detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
+            <MetadataListItem label="Local rank">{detail.officialResults.rank ?? "—"}</MetadataListItem>
+            <MetadataListItem label="Local score"><strong className="official-score-value">{detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
             <MetadataListItem label="Final distance">{detail.officialResults.finalDistance.toFixed(4)} km</MetadataListItem>
             <MetadataListItem label="Total Delta-V">{detail.officialResults.totalDeltaV.toFixed(4)} km/s</MetadataListItem>
             <MetadataListItem label="Total time">{detail.officialResults.totalTime.toFixed(2)} s</MetadataListItem>

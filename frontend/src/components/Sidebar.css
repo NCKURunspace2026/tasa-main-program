@@ -81,15 +81,8 @@
   background: #94a3b8;
 }
 
-.sidebar-role-worker {
-  color: #4ade80;
-  border-color: rgba(74, 222, 128, 0.24);
-  background: rgba(74, 222, 128, 0.06);
-}
-
-.sidebar-role-worker > span { background: #4ade80; }
-.sidebar-role-client { color: #60a5fa; }
-.sidebar-role-client > span { background: #60a5fa; }
+.sidebar-role-local { color: #60a5fa; }
+.sidebar-role-local > span { background: #60a5fa; }
 
 .sidebar.is-collapsed .sidebar-role {
   width: 32px;

@@ -8,7 +8,7 @@ from ..services.submission_service import ScenarioNotFoundError, create_submissi
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def post_submission(
     payload: SubmissionInput,
     session: Session = Depends(get_db),
@@ -17,6 +17,8 @@ def post_submission(
         return create_submission(session, payload)
     except ScenarioNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.get("/{submission_id}")

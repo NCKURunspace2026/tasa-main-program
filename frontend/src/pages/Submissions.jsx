@@ -4,7 +4,7 @@ import "./Submissions.css";
 
 import PageHeader from "../components/PageHeader.jsx";
 import useScenarios from "../hooks/useScenarios.js";
-import { createSubmission, getSubmission } from "../services/api.js";
+import { createSubmission, runDataSync } from "../services/api.js";
 
 const validationDefinitions = [
   {
@@ -27,9 +27,9 @@ const validationDefinitions = [
   },
   {
     id: "result",
-    title: "Validation result",
+    title: "Local result saved",
     description:
-      "The official result is stored in this device's local database.",
+      "The locally validated result is scored and stored in this device's database.",
   },
 ];
 
@@ -291,42 +291,19 @@ export default function Submissions({ onNavigate }) {
         },
       });
       if (validationRunRef.current !== currentRun) return;
-      setValidationState({
-        status: result.status === "accepted" ? "queued" : "failed",
-        currentStep: 4,
-        message: result.status === "accepted"
-          ? `Local GMAT passed in ${localValidationSeconds.toFixed(2)} s via ${localResult.provider}. ${result.submissionId} is waiting for official validation.`
-          : result.message ?? "Submission was not accepted.",
-        checkedAt: new Date(),
-        submissionId: result.submissionId,
-        solutionId: null,
-        executionEvidence,
-      });
-      if (result.status !== "accepted") return;
-
-      const officialResult = await waitForOfficialResult(result.submissionId, currentRun);
-      if (!officialResult || validationRunRef.current !== currentRun) return;
-      if (officialResult.status === "passed") {
-        setValidationState({
-          status: "passed",
-          currentStep: 4,
-          message: `Official GMAT passed. Minimum distance: ${officialResult.officialResults.minimumDistanceKm.toFixed(6)} km.`,
-          checkedAt: new Date(),
-          submissionId: result.submissionId,
-          solutionId: officialResult.solutionId,
-          executionEvidence,
-        });
-        return;
+      if (result.status !== "passed") {
+        throw new Error(result.message ?? "The locally validated Solution was not saved.");
       }
       setValidationState({
-        status: "failed",
+        status: "passed",
         currentStep: 4,
-        message: officialResult.errorMessage ?? "Official GMAT validation failed.",
+        message: `Local GMAT passed in ${localValidationSeconds.toFixed(2)} s via ${localResult.provider}. The scored Solution was saved locally and will be synchronized.`,
         checkedAt: new Date(),
         submissionId: result.submissionId,
-        solutionId: officialResult.solutionId,
+        solutionId: result.solutionId,
         executionEvidence,
       });
+      runDataSync().catch(() => {});
     } catch (error) {
       if (validationRunRef.current !== currentRun) return;
       setValidationState({
@@ -341,24 +318,6 @@ export default function Submissions({ onNavigate }) {
     }
   }
 
-  async function waitForOfficialResult(submissionId, currentRun) {
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      if (validationRunRef.current !== currentRun) return null;
-      const result = await getSubmission(submissionId);
-      if (result.status === "passed" || result.status === "failed") return result;
-      setValidationState((state) => ({
-        ...state,
-        status: "queued",
-        currentStep: 4,
-        message: result.status === "validating"
-          ? `The official validation computer is checking ${submissionId} with GMAT.`
-          : `${submissionId} is queued for official GMAT validation.`,
-      }));
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-    throw new Error("Official GMAT did not finish within 120 seconds.");
-  }
-
   function resetValidation() {
     validationRunRef.current += 1;
 
@@ -371,7 +330,7 @@ export default function Submissions({ onNavigate }) {
     <section className="submissions-page">
       <PageHeader
         title="Submissions"
-        description="Enter the trajectory decision variables. Local GMAT checks the input before this device queues official GMAT validation."
+        description="Enter the trajectory decision variables. This device runs one local GMAT validation, scores the result, and saves it to the local dataset."
       >
         <div className="submission-scenario-field">
           <label htmlFor="submission-scenario">
@@ -724,9 +683,6 @@ function ValidationPanel({
   const isRunning =
     validationState.status === "running";
 
-  const isQueued =
-    validationState.status === "queued";
-
   const isPassed =
     validationState.status === "passed";
 
@@ -762,7 +718,7 @@ function ValidationPanel({
             const isCurrent =
               validationState.currentStep ===
                 stepNumber &&
-              (isRunning || isQueued || isFailed);
+              (isRunning || isFailed);
 
             return (
               <div
@@ -809,7 +765,7 @@ function ValidationPanel({
       <div
         className={[
           "validation-message",
-          isRunning || isQueued ? "is-running" : "",
+          isRunning ? "is-running" : "",
           isPassed ? "is-passed" : "",
           isFailed ? "is-failed" : "",
         ]
@@ -817,7 +773,7 @@ function ValidationPanel({
           .join(" ")}
       >
         <div className="validation-message-icon">
-          {(isRunning || isQueued) && <LoadingIcon />}
+          {isRunning && <LoadingIcon />}
           {isPassed && <CheckIcon />}
           {isFailed && <ErrorIcon />}
           {isIdle && <ValidationIcon />}
@@ -860,14 +816,12 @@ function ValidationPanel({
         </div>
 
         <div>
-          <span>Upload status</span>
+          <span>Dataset status</span>
 
           <strong>
             {isPassed
-              ? "Officially validated"
-              : isQueued
-                ? "Central validation pending"
-                : "Waiting for validation"}
+              ? "Saved locally"
+              : "Waiting for local validation"}
           </strong>
         </div>
 
@@ -911,7 +865,6 @@ function ValidationBadge({ status }) {
   const labels = {
     idle: "Waiting",
     running: "Checking",
-    queued: "Central check",
     passed: "Validated",
     failed: "Failed",
   };
@@ -930,7 +883,6 @@ function getValidationTitle(status) {
   const titles = {
     idle: "Ready for submission",
     running: "Validation in progress",
-    queued: "Waiting for official GMAT",
     passed: "Validation passed",
     failed: "Validation failed",
   };

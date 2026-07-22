@@ -741,3 +741,58 @@
     height: 640px;
   }
 }
+.leaderboard-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 8, 23, 0.76);
+  backdrop-filter: blur(5px);
+}
+
+.leaderboard-dialog {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--surface-primary);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.leaderboard-dialog h2,
+.leaderboard-dialog p {
+  margin: 0;
+}
+
+.leaderboard-dialog > p:not(.submission-panel-eyebrow) {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.leaderboard-dialog input {
+  width: 100%;
+}
+
+.leaderboard-dialog .leaderboard-dialog-error {
+  color: #f87171;
+}
+
+.leaderboard-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.leaderboard-dialog-actions button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+}

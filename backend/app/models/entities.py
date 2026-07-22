@@ -21,7 +21,6 @@ class Scenario(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     name: Mapped[str] = mapped_column(String(160))
     description: Mapped[str] = mapped_column(Text, default="")
-    original_script: Mapped[Optional[str]] = mapped_column(Text)
     scenario_json: Mapped[dict] = mapped_column(JSON)
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(16), default="active", index=True)
@@ -63,11 +62,6 @@ class Submission(Base):
     penalty_score: Mapped[Optional[float]] = mapped_column(Float)
     total_score: Mapped[Optional[float]] = mapped_column(Float)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
-    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
-    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
-    claimed_by_worker_id: Mapped[Optional[str]] = mapped_column(String(96), index=True)
-    claim_token: Mapped[Optional[str]] = mapped_column(String(64))
-    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now
@@ -75,22 +69,30 @@ class Submission(Base):
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
-class ValidationWorker(Base):
-    __tablename__ = "validation_workers"
-
-    id: Mapped[str] = mapped_column(String(96), primary_key=True)
-    provider: Mapped[str] = mapped_column(String(80))
-    gmat_configured: Mapped[bool] = mapped_column(Boolean, default=False)
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, index=True
-    )
-
-
 class SyncSetting(Base):
     __tablename__ = "sync_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     peer_url: Mapped[Optional[str]] = mapped_column(String(500))
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_pushed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    remote_cursor: Mapped[int] = mapped_column(Integer, default=0)
+    remote_generation: Mapped[Optional[str]] = mapped_column(String(64))
     last_error: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class SyncRelayState(Base):
+    __tablename__ = "sync_relay_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    generation_id: Mapped[str] = mapped_column(String(64), unique=True)
+
+
+class SyncEvent(Base):
+    __tablename__ = "sync_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    record_type: Mapped[str] = mapped_column(String(24), index=True)
+    record_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

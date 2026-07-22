@@ -1,7 +1,24 @@
 const { spawn } = require("node:child_process");
 const { execFileSync } = require("node:child_process");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
+const net = require("node:net");
 const path = require("node:path");
+
+function findAvailablePort(host = "127.0.0.1", createServer = net.createServer) {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.once("error", reject);
+    server.listen(0, host, () => {
+      const address = server.address();
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve(address.port);
+      });
+    });
+  });
+}
 
 function resolveBackendCommand({
   isPackaged,
@@ -48,7 +65,7 @@ function detectAppleSilicon(platform = process.platform) {
 
 async function startLocalBackend({
   app,
-  port = 8765,
+  port,
   spawnProcess = spawn,
   fetchHealth = fetch,
 }) {
@@ -59,15 +76,18 @@ async function startLocalBackend({
   if (!fs.existsSync(command.command)) {
     throw new Error(`Local backend executable was not found: ${command.command}`);
   }
-  const apiBaseUrl = `http://127.0.0.1:${port}/api`;
+  const selectedPort = port ?? await findAvailablePort();
+  const adminToken = crypto.randomBytes(32).toString("hex");
+  const apiBaseUrl = `http://127.0.0.1:${selectedPort}/api`;
   const child = spawnProcess(command.command, command.args, {
     cwd: command.cwd,
     env: {
       ...process.env,
       MISSION_DASHBOARD_API_HOST: "127.0.0.1",
-      MISSION_DASHBOARD_API_PORT: String(port),
+      MISSION_DASHBOARD_API_PORT: String(selectedPort),
       MISSION_DASHBOARD_DATA_DIR: path.join(app.getPath("userData"), "data"),
       MISSION_DASHBOARD_NODE_ROLE: "local",
+      MISSION_DASHBOARD_ADMIN_TOKEN: adminToken,
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -81,10 +101,10 @@ async function startLocalBackend({
     child.kill();
     throw error;
   }
-  return { apiBaseUrl, process: child };
+  return { adminToken, apiBaseUrl, process: child };
 }
 
-async function waitUntilReady(apiBaseUrl, fetchHealth, attempts = 80) {
+async function waitUntilReady(apiBaseUrl, fetchHealth, attempts = 300) {
   const healthUrl = apiBaseUrl.replace(/\/api$/, "/health");
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -98,4 +118,10 @@ async function waitUntilReady(apiBaseUrl, fetchHealth, attempts = 80) {
   throw new Error("Local Mission Dashboard backend did not become ready.");
 }
 
-module.exports = { detectAppleSilicon, resolveBackendCommand, startLocalBackend, waitUntilReady };
+module.exports = {
+  detectAppleSilicon,
+  findAvailablePort,
+  resolveBackendCommand,
+  startLocalBackend,
+  waitUntilReady,
+};

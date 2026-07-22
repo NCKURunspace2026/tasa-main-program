@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from secrets import token_hex
-
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Solution, Submission
@@ -19,8 +16,8 @@ def find_by_id(session: Session, submission_id: str) -> Submission | None:
     return session.get(Submission, submission_id)
 
 
-def find_passed_by_scenario(session: Session, scenario_id: str):
-    return session.execute(
+def _passed_solution_query(scenario_id: str, search: str | None = None):
+    query = (
         select(Submission, Solution)
         .join(Solution, Solution.id == Submission.solution_id)
         .where(
@@ -28,72 +25,33 @@ def find_passed_by_scenario(session: Session, scenario_id: str):
             Solution.deleted_at.is_(None),
             Submission.status == "passed",
         )
-        .order_by(Submission.total_score.desc(), Submission.created_at.asc())
-    ).all()
+    )
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(or_(Solution.id.ilike(pattern), Solution.name.ilike(pattern)))
+    return query
 
 
-def claim_next_pending(
+def find_passed_by_scenario(
     session: Session,
-    worker_id: str,
-    lease_seconds: int = 180,
-) -> Submission | None:
-    now = datetime.now(timezone.utc)
-    session.execute(
-        update(Submission)
-        .where(
-            Submission.status == "validating",
-            Submission.lease_expires_at.is_not(None),
-            Submission.lease_expires_at < now,
-        )
-        .values(
-            status="pending",
-            claimed_at=None,
-            lease_expires_at=None,
-            claimed_by_worker_id=None,
-            claim_token=None,
-        )
+    scenario_id: str,
+    *,
+    offset: int,
+    limit: int,
+    search: str | None = None,
+):
+    query = _passed_solution_query(scenario_id, search).order_by(
+        Submission.total_score.desc(), Submission.created_at.asc()
     )
+    return session.execute(query.offset(offset).limit(limit)).all()
 
-    query = (
-        select(Submission)
-        .join(Solution, Solution.id == Submission.solution_id)
-        .where(Submission.status == "pending")
-        .where(Solution.deleted_at.is_(None))
-        .order_by(Submission.created_at.asc())
-        .limit(1)
-    )
-    if session.bind is not None and session.bind.dialect.name == "postgresql":
-        query = query.with_for_update(skip_locked=True)
 
-    candidate = session.scalar(query)
-    if candidate is None:
-        session.commit()
-        return None
-
-    claim_token = token_hex(24)
-    lease_expires_at = now + timedelta(seconds=lease_seconds)
-    if session.bind is not None and session.bind.dialect.name == "postgresql":
-        candidate.status = "validating"
-        candidate.claimed_at = now
-        candidate.lease_expires_at = lease_expires_at
-        candidate.claimed_by_worker_id = worker_id
-        candidate.claim_token = claim_token
-        candidate.attempt_count += 1
-    else:
-        claimed = session.execute(
-            update(Submission)
-            .where(Submission.id == candidate.id, Submission.status == "pending")
-            .values(
-                status="validating",
-                claimed_at=now,
-                lease_expires_at=lease_expires_at,
-                claimed_by_worker_id=worker_id,
-                claim_token=claim_token,
-                attempt_count=Submission.attempt_count + 1,
-            )
-        )
-        if claimed.rowcount != 1:
-            session.rollback()
-            return None
-    session.commit()
-    return session.get(Submission, candidate.id)
+def count_passed_by_scenario(
+    session: Session,
+    scenario_id: str,
+    search: str | None = None,
+) -> int:
+    query = _passed_solution_query(scenario_id, search).with_only_columns(
+        func.count(Submission.id)
+    ).order_by(None)
+    return int(session.scalar(query) or 0)

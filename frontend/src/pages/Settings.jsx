@@ -9,7 +9,6 @@ import {
   getCloudAddress,
   getScenarios,
   getSyncSettings,
-  setCloudAddress,
   testCloudConnection,
   runDataSync,
   updateSyncSettings,
@@ -18,6 +17,7 @@ import {
 
 const sections = [
   ["connection", "Connection"],
+  ["security", "Security"],
   ["updates", "App Updates"],
   ["validation", "Local GMAT"],
   ["administration", "Scenario Administration"],
@@ -29,7 +29,6 @@ const defaultSettings = {
   gmatExecutablePath: "",
   validationTimeout: "120",
   keepTemporaryFiles: false,
-  runOfficialValidationWorker: false,
 };
 
 const emptyScenarioLimits = {
@@ -74,11 +73,25 @@ const starterScenarioDefinition = {
       stateType: "Cartesian",
       positionKm: [7000, 0, 0],
       velocityKmPerSec: [0, 7.546, 0],
+      physicalProperties: {
+        dryMassKg: 850,
+        dragAreaM2: 15,
+        srpAreaM2: 1,
+        coefficientOfDrag: 2.2,
+        coefficientOfReflectivity: 1.8,
+      },
     },
     chaser: {
       stateType: "Cartesian",
       positionKm: [6990, 0, 0],
       velocityKmPerSec: [0, 7.55, 0],
+      physicalProperties: {
+        dryMassKg: 850,
+        dragAreaM2: 15,
+        srpAreaM2: 1,
+        coefficientOfDrag: 2.2,
+        coefficientOfReflectivity: 1.8,
+      },
     },
   },
   forceModel: {
@@ -126,21 +139,11 @@ function newScenarioForm() {
   };
 }
 
-function loadSettings() {
-  try {
-    const value = window.localStorage.getItem("mission-dashboard-settings");
-    return value ? { ...defaultSettings, ...JSON.parse(value) } : defaultSettings;
-  } catch {
-    return defaultSettings;
-  }
-}
-
-export default function Settings({ runtimeConfig }) {
-  const isWorker = runtimeConfig?.role === "worker";
-  const canAdmin = Boolean(window.missionDashboardDesktop?.adminCloudRequest);
+export default function Settings() {
+  const canAdmin = Boolean(window.missionDashboardDesktop?.localAdminRequest);
   const visibleSections = sections.filter(([id]) => id !== "administration" || canAdmin);
   const [activeSection, setActiveSection] = useState("connection");
-  const [settings, setSettings] = useState(loadSettings);
+  const [settings, setSettings] = useState(defaultSettings);
   const [message, setMessage] = useState("");
   const [scenarios, setScenarios] = useState([]);
   const [scenarioForm, setScenarioForm] = useState(newScenarioForm);
@@ -148,7 +151,14 @@ export default function Settings({ runtimeConfig }) {
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
   const [isSavingScenario, setIsSavingScenario] = useState(false);
+  const [includeArchivedExport, setIncludeArchivedExport] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
+  const [passwordForm, setPasswordForm] = useState({
+    configured: false,
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   useEffect(() => {
     let isCurrent = true;
@@ -164,7 +174,7 @@ export default function Settings({ runtimeConfig }) {
         }
       })
       .catch(() => {});
-    getScenarios({ includeInactive: canAdmin })
+    getScenarios()
       .then((result) => {
         if (isCurrent) {
           setScenarios(result.items);
@@ -205,6 +215,18 @@ export default function Settings({ runtimeConfig }) {
     };
   }, []);
 
+  useEffect(() => {
+    let isCurrent = true;
+    window.missionDashboardDesktop?.getAdminPasswordStatus?.()
+      .then((status) => {
+        if (isCurrent) {
+          setPasswordForm((current) => ({ ...current, configured: status.configured }));
+        }
+      })
+      .catch(() => {});
+    return () => { isCurrent = false; };
+  }, []);
+
   function updateSetting(event) {
     const { name, value, type, checked } = event.target;
     setSettings((current) => ({
@@ -215,17 +237,14 @@ export default function Settings({ runtimeConfig }) {
 
   async function saveSettings() {
     try {
-      setCloudAddress(settings.cloudAddress);
       await updateSyncSettings({
         peerUrl: settings.cloudAddress,
         enabled: settings.syncEnabled,
       });
-      window.localStorage.setItem("mission-dashboard-settings", JSON.stringify(settings));
       await window.missionDashboardDesktop?.saveGmatConfig?.({
         gmatInstallationPath: settings.gmatExecutablePath.trim(),
         timeoutMs: Number(settings.validationTimeout) * 1000,
         keepTemporaryFiles: settings.keepTemporaryFiles,
-        runOfficialValidationWorker: settings.runOfficialValidationWorker,
       });
       setMessage("Settings saved on this device.");
     } catch (error) {
@@ -253,6 +272,33 @@ export default function Settings({ runtimeConfig }) {
       setMessage(result.status === "disabled"
         ? "Synchronization is disabled on this device."
         : `Sync complete: pushed ${result.pushed}, pulled ${result.pulled}, conflicts ${result.conflicts.length}.`);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  function updatePasswordField(event) {
+    setPasswordForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  }
+
+  async function saveAdminPassword(event) {
+    event.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setMessage("The new passwords do not match.");
+      return;
+    }
+    try {
+      await window.missionDashboardDesktop.setAdminPassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordForm({
+        configured: true,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setMessage("Device administration password saved.");
     } catch (error) {
       setMessage(error.message);
     }
@@ -442,8 +488,10 @@ export default function Settings({ runtimeConfig }) {
 
   async function exportDataset(format) {
     try {
-      const filename = await downloadDataExport(format);
-      setMessage(`${filename} downloaded with active and archived records.`);
+      const filename = await downloadDataExport(format, includeArchivedExport);
+      setMessage(includeArchivedExport
+        ? `${filename} downloaded with active and archived records.`
+        : `${filename} downloaded with active ML-ready records only.`);
     } catch (error) {
       setMessage(error.message);
     }
@@ -453,16 +501,14 @@ export default function Settings({ runtimeConfig }) {
     <section className="settings-page">
       <PageHeader
         title="Settings"
-        description={isWorker
-          ? "This designated computer runs official GMAT validation and Scenario Administration."
-          : "This application stores mission data in this device's local SQLite database."}
+        description="This application validates once with local GMAT and stores mission data in this device's SQLite database."
       />
 
       <div className="settings-layout">
         <aside className="settings-navigation">
           <div className="settings-navigation-header">
             <span>Settings</span>
-            <small>Only active controls are shown</small>
+            <small>Device and Scenario controls</small>
           </div>
           <nav className="settings-navigation-list">
             {visibleSections.map(([id, label]) => (
@@ -500,11 +546,61 @@ export default function Settings({ runtimeConfig }) {
                   onChange={updateSetting}
                 />
               </SettingsRow>
+              <p className="settings-section-note">
+                When enabled, this device synchronizes every 60 seconds and immediately after a locally validated Solution is saved.
+              </p>
               <div className="settings-inline-actions scenario-form-actions">
                 <button className="settings-secondary-button" type="button" onClick={testConnection}>Test Relay</button>
                 <button className="settings-secondary-button" type="button" onClick={syncNow}>Sync Now</button>
                 <button className="settings-primary-button" type="button" onClick={saveSettings}>Save</button>
               </div>
+            </SettingsSection>
+          ) : null}
+
+          {activeSection === "security" ? (
+            <SettingsSection
+              title="Device Security"
+              description="Removing a Solution from the Leaderboard requires this device-local password. Only a salted hash is stored."
+            >
+              <form onSubmit={saveAdminPassword}>
+                {passwordForm.configured ? (
+                  <SettingsRow label="Current password">
+                    <input
+                      name="currentPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      value={passwordForm.currentPassword}
+                      onChange={updatePasswordField}
+                      required
+                    />
+                  </SettingsRow>
+                ) : null}
+                <SettingsRow label={passwordForm.configured ? "New password" : "Create password"}>
+                  <input
+                    name="newPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength="6"
+                    value={passwordForm.newPassword}
+                    onChange={updatePasswordField}
+                    required
+                  />
+                </SettingsRow>
+                <SettingsRow label="Confirm new password">
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength="6"
+                    value={passwordForm.confirmPassword}
+                    onChange={updatePasswordField}
+                    required
+                  />
+                </SettingsRow>
+                <button className="settings-primary-button" type="submit">
+                  {passwordForm.configured ? "Change Password" : "Set Password"}
+                </button>
+              </form>
             </SettingsSection>
           ) : null}
 
@@ -542,12 +638,6 @@ export default function Settings({ runtimeConfig }) {
                   checked={settings.keepTemporaryFiles}
                   onChange={updateSetting}
                 />
-              </SettingsRow>
-              <SettingsRow
-                label="Run official validation worker"
-                description="When enabled, this device claims queued submissions and validates them with its configured GMAT installation."
-              >
-                <input name="runOfficialValidationWorker" type="checkbox" checked={settings.runOfficialValidationWorker} onChange={updateSetting} />
               </SettingsRow>
               <button className="settings-primary-button" type="button" onClick={saveSettings}>Save Local GMAT</button>
             </SettingsSection>
@@ -699,6 +789,16 @@ export default function Settings({ runtimeConfig }) {
                 ))}
               </div>
               <div className="scenario-admin-divider"><span>Data export</span></div>
+              <SettingsRow
+                label="Include archived records"
+                description="Off by default. Enable only for audit or recovery; archived Solutions may be unsuitable for ML training."
+              >
+                <input
+                  type="checkbox"
+                  checked={includeArchivedExport}
+                  onChange={(event) => setIncludeArchivedExport(event.target.checked)}
+                />
+              </SettingsRow>
               <div className="settings-inline-actions scenario-form-actions">
                 <button className="settings-secondary-button" type="button" onClick={() => exportDataset("jsonl")}>Export JSONL</button>
                 <button className="settings-secondary-button" type="button" onClick={() => exportDataset("csv")}>Export CSV</button>

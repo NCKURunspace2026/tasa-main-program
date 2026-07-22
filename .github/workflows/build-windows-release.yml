@@ -1,4 +1,4 @@
-name: Build Windows Release
+name: Build Desktop Release
 
 on:
   push:
@@ -9,13 +9,69 @@ on:
       release_tag:
         description: GitHub Release tag to create or update
         required: true
-        default: v0.2.0
+        default: v0.2.4
 
 permissions:
   contents: write
 
 jobs:
+  build-macos:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build macOS arm64 application and DMG
+        run: |
+          cd ../backend
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt -r requirements-build.txt
+          cd ../frontend
+          npm ci
+          npm run lint
+          npm run test:electron
+          npm run electron:build:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload macOS DMG to GitHub Release
+        run: |
+          artifact="dist/Mission-Dashboard-$(node -p "require('./package.json').version")-arm64.dmg"
+          checksum="$artifact.sha256.txt"
+          test -f "$artifact"
+          test -f "$checksum"
+          release_tag="${{ inputs.release_tag }}"
+          if [ -z "$release_tag" ]; then
+            release_tag="v$(node -p "require('./package.json').version")"
+          fi
+          gh release view "$release_tag" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$release_tag" \
+              --target "${{ github.sha }}" \
+              --title "Mission Dashboard $release_tag" \
+              --generate-notes \
+              --repo "${{ github.repository }}"
+          gh release upload "$release_tag" "$artifact" "$checksum" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build-windows:
+    needs: build-macos
     runs-on: windows-latest
     defaults:
       run:
@@ -80,7 +136,7 @@ jobs:
           }
           gh release view $releaseTag --repo "${{ github.repository }}" 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $releaseTag --title "Mission Dashboard $releaseTag" --generate-notes --repo "${{ github.repository }}"
+            gh release create $releaseTag --target "${{ github.sha }}" --title "Mission Dashboard $releaseTag" --generate-notes --repo "${{ github.repository }}"
           }
           gh release upload $releaseTag `
             $installer.FullName `

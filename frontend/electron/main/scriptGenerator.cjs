@@ -4,7 +4,23 @@ function requireState(definition, stateName) {
     || state.positionKm.length !== 3 || state.velocityKmPerS.length !== 3) {
     throw new Error(`Scenario definition is missing ${stateName} Cartesian state (km, km/s).`);
   }
-  return state;
+  const values = [...state.positionKm, ...state.velocityKmPerS];
+  if (values.some((value) => !Number.isFinite(Number(value)))) {
+    throw new Error(`${stateName} Cartesian state must contain finite numeric values.`);
+  }
+  return {
+    ...state,
+    positionKm: state.positionKm.map(Number),
+    velocityKmPerS: state.velocityKmPerS.map(Number),
+  };
+}
+
+function finitePositive(value, label) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(`${label} must be a finite value greater than zero.`);
+  }
+  return number;
 }
 
 function getFormalScenarioState(scenario, role) {
@@ -15,10 +31,21 @@ function getFormalScenarioState(scenario, role) {
   if (!Array.isArray(position) || !Array.isArray(velocity)) {
     return null;
   }
+  if (position.length !== 3 || velocity.length !== 3
+    || [...position, ...velocity].some((value) => !Number.isFinite(Number(value)))) {
+    throw new Error(`${role} Cartesian state must contain three finite numeric values per vector.`);
+  }
   return {
     epochUtc: definition.epoch?.value ?? definition.epoch,
-    positionKm: position,
-    velocityKmPerS: velocity,
+    positionKm: position.map(Number),
+    velocityKmPerS: velocity.map(Number),
+    physicalProperties: {
+      dryMassKg: finitePositive(spacecraft?.physicalProperties?.dryMassKg ?? 850, `${role} dry mass`),
+      dragAreaM2: finitePositive(spacecraft?.physicalProperties?.dragAreaM2 ?? 15, `${role} drag area`),
+      srpAreaM2: finitePositive(spacecraft?.physicalProperties?.srpAreaM2 ?? 1, `${role} SRP area`),
+      coefficientOfDrag: finitePositive(spacecraft?.physicalProperties?.coefficientOfDrag ?? 2.2, `${role} coefficient of drag`),
+      coefficientOfReflectivity: finitePositive(spacecraft?.physicalProperties?.coefficientOfReflectivity ?? 1.8, `${role} coefficient of reflectivity`),
+    },
   };
 }
 
@@ -111,6 +138,13 @@ function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
   );
   const chaserName = "ChaserSC";
   const targetName = "TargetSC";
+  const initialStep = finitePositive(propagator.initialStepSec ?? 1, "Initial step");
+  const maxStep = finitePositive(propagator.maxStepSec ?? 1, "Maximum step");
+  const minStep = finitePositive(propagator.minStepSec ?? 0.001, "Minimum step");
+  const accuracy = finitePositive(propagator.accuracy ?? 1e-12, "Propagator accuracy");
+  if (!(minStep <= initialStep && initialStep <= maxStep)) {
+    throw new Error("Propagator steps must satisfy minStepSec <= initialStepSec <= maxStepSec.");
+  }
   const burnDefinitions = finalDecisionVariables.burns.flatMap((burn, index) => {
     const name = `Burn${index + 1}`;
     return [
@@ -133,6 +167,16 @@ function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
       `GMAT ${chaserName}.${key} = ${[...chaser.positionKm, ...chaser.velocityKmPerS][index]};`,
       `GMAT ${targetName}.${key} = ${[...target.positionKm, ...target.velocityKmPerS][index]};`,
     ]),
+    ...[
+      [chaserName, chaser.physicalProperties],
+      [targetName, target.physicalProperties],
+    ].flatMap(([name, properties]) => properties ? [
+      `GMAT ${name}.DryMass = ${properties.dryMassKg};`,
+      `GMAT ${name}.DragArea = ${properties.dragAreaM2};`,
+      `GMAT ${name}.SRPArea = ${properties.srpAreaM2};`,
+      `GMAT ${name}.Cd = ${properties.coefficientOfDrag};`,
+      `GMAT ${name}.Cr = ${properties.coefficientOfReflectivity};`,
+    ] : []),
     "Create ForceModel FM;",
     `GMAT FM.CentralBody = ${forceModel.centralBody};`,
     `GMAT FM.PrimaryBodies = {${forceModel.centralBody}};`,
@@ -144,10 +188,10 @@ function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
     `GMAT FM.RelativisticCorrection = ${forceModel.relativityEnabled ? "On" : "Off"};`,
     "Create Propagator Prop;", "GMAT Prop.FM = FM;",
     `GMAT Prop.Type = ${integrator};`,
-    `GMAT Prop.InitialStepSize = ${propagator.initialStepSec ?? 60};`,
-    `GMAT Prop.MaxStep = ${propagator.maxStepSec ?? 1};`,
-    `GMAT Prop.MinStep = ${propagator.minStepSec ?? 0.001};`,
-    `GMAT Prop.Accuracy = ${propagator.accuracy ?? 1e-12};`,
+    `GMAT Prop.InitialStepSize = ${initialStep};`,
+    `GMAT Prop.MaxStep = ${maxStep};`,
+    `GMAT Prop.MinStep = ${minStep};`,
+    `GMAT Prop.Accuracy = ${accuracy};`,
     "Create ReportFile ValidationReport;", `GMAT ValidationReport.Filename = '${reportPath.replaceAll("\\", "/")}';`,
     `GMAT ValidationReport.Add = {${chaserName}.X, ${chaserName}.Y, ${chaserName}.Z, ${targetName}.X, ${targetName}.Y, ${targetName}.Z};`,
     ...burnDefinitions,

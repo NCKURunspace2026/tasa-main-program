@@ -30,15 +30,19 @@ EXPORT_FIELDS = (
 )
 
 
-def build_export_rows(session: Session) -> list[dict]:
-    rows = session.execute(
+def iter_export_rows(session: Session, *, include_archived: bool = False):
+    query = (
         select(Scenario, Solution, Submission)
         .join(Solution, Solution.scenario_id == Scenario.id)
         .outerjoin(Submission, Submission.solution_id == Solution.id)
         .order_by(Scenario.id, Solution.created_at, Submission.created_at)
-    ).all()
-    return [
-        {
+        .execution_options(yield_per=500)
+    )
+    if not include_archived:
+        query = query.where(Solution.deleted_at.is_(None))
+    rows = session.execute(query)
+    for scenario, solution, submission in rows:
+        yield {
             "scenario_id": scenario.id,
             "scenario_name": scenario.name,
             "scenario_status": scenario.status,
@@ -56,22 +60,21 @@ def build_export_rows(session: Session) -> list[dict]:
             "created_at": _iso(solution.created_at),
             "validated_at": _iso(submission.validated_at) if submission else None,
         }
-        for scenario, solution, submission in rows
-    ]
 
 
-def export_jsonl(session: Session) -> str:
-    return "".join(
-        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
-        for row in build_export_rows(session)
-    )
+def export_jsonl(session: Session, *, include_archived: bool = False):
+    for row in iter_export_rows(session, include_archived=include_archived):
+        yield json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
 
 
-def export_csv(session: Session) -> str:
+def export_csv(session: Session, *, include_archived: bool = False):
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=EXPORT_FIELDS)
     writer.writeheader()
-    for row in build_export_rows(session):
+    yield output.getvalue()
+    for row in iter_export_rows(session, include_archived=include_archived):
+        output.seek(0)
+        output.truncate(0)
         csv_row = dict(row)
         csv_row["scenario_definition"] = json.dumps(
             row["scenario_definition"], ensure_ascii=False, separators=(",", ":")
@@ -80,7 +83,7 @@ def export_csv(session: Session) -> str:
             row["decision_variables"], ensure_ascii=False, separators=(",", ":")
         )
         writer.writerow(csv_row)
-    return output.getvalue()
+        yield output.getvalue()
 
 
 def _iso(value) -> str | None:

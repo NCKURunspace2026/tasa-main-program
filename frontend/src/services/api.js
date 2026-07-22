@@ -1,5 +1,4 @@
 const API_BASE_STORAGE_KEY = "mission-dashboard-api-base-url";
-const RELAY_ADDRESS_STORAGE_KEY = "mission-dashboard-relay-address";
 const runtimeApiBaseUrl = new URLSearchParams(window.location.search).get("apiBaseUrl");
 const DEFAULT_API_BASE_URL = runtimeApiBaseUrl
   ?? import.meta.env.VITE_API_BASE_URL
@@ -28,13 +27,7 @@ function normalizeCloudAddress(cloudAddress) {
 }
 
 export function getCloudAddress() {
-  return window.localStorage.getItem(RELAY_ADDRESS_STORAGE_KEY) ?? DEFAULT_RELAY_ADDRESS;
-}
-
-export function setCloudAddress(cloudAddress) {
-  const apiBaseUrl = normalizeCloudAddress(cloudAddress);
-  window.localStorage.setItem(RELAY_ADDRESS_STORAGE_KEY, apiBaseUrl.replace(/\/api$/, ""));
-  return apiBaseUrl.replace(/\/api$/, "");
+  return DEFAULT_RELAY_ADDRESS;
 }
 
 export async function testCloudConnection(cloudAddress) {
@@ -43,14 +36,11 @@ export async function testCloudConnection(cloudAddress) {
   const startedAt = performance.now();
   const response = await fetch(healthUrl);
   const payload = await response.json().catch(() => null);
-  if (!response.ok || payload?.status !== "ok") {
+  if (!response.ok || payload?.status !== "ok" || payload?.nodeRole !== "relay") {
     throw new Error("Relay health check failed.");
   }
   return {
     latencyMs: Math.round(performance.now() - startedAt),
-    validationProvider: payload.validationProvider,
-    validationWorker: payload.validationWorker,
-    physicalValidation: payload.physicalValidation,
     nodeRole: payload.nodeRole,
   };
 }
@@ -115,8 +105,8 @@ export function getSolutionDetail(solutionId) {
   return request(`/solutions/${solutionId}`);
 }
 
-export function getScenarios({ includeInactive = false } = {}) {
-  return request(`/scenarios${includeInactive ? "?includeInactive=true" : ""}`);
+export function getScenarios() {
+  return request("/scenarios");
 }
 
 export function createScenario(scenario) {
@@ -133,32 +123,16 @@ export function updateScenario(scenarioId, scenario) {
   });
 }
 
-export function deleteScenario(scenarioId) {
-  return adminRequest(`/scenarios/${scenarioId}`, { method: "DELETE" });
+export function deleteSolution(solutionId, adminPassword) {
+  return adminRequest(`/solutions/${solutionId}`, { method: "DELETE", adminPassword });
 }
 
-export function restoreScenario(scenarioId) {
-  return adminRequest(`/scenarios/${scenarioId}/restore`, { method: "POST" });
-}
-
-export function getSolutions({ scenarioId, includeDeleted = false } = {}) {
-  const parameters = new URLSearchParams();
-  if (scenarioId) parameters.set("scenarioId", scenarioId);
-  if (includeDeleted) parameters.set("includeDeleted", "true");
-  const query = parameters.toString();
-  return request(`/solutions${query ? `?${query}` : ""}`);
-}
-
-export function deleteSolution(solutionId) {
-  return adminRequest(`/solutions/${solutionId}`, { method: "DELETE" });
-}
-
-export function restoreSolution(solutionId) {
-  return adminRequest(`/solutions/${solutionId}/restore`, { method: "POST" });
-}
-
-export async function downloadDataExport(format) {
-  const response = await fetch(`${getStoredApiBaseUrl()}/data/export?format=${format}`);
+export async function downloadDataExport(format, includeArchived = false) {
+  const parameters = new URLSearchParams({
+    format,
+    includeArchived: String(includeArchived),
+  });
+  const response = await fetch(`${getStoredApiBaseUrl()}/data/export?${parameters.toString()}`);
   if (!response.ok) throw new Error(`Data export failed (${response.status}).`);
   const blob = await response.blob();
   const disposition = response.headers.get("Content-Disposition") ?? "";
@@ -174,8 +148,8 @@ export async function downloadDataExport(format) {
 }
 
 function adminRequest(path, options) {
-  if (!window.missionDashboardDesktop?.adminCloudRequest) {
-    throw new Error("Scenario administration requires the designated official validation computer.");
+  if (!window.missionDashboardDesktop?.localAdminRequest) {
+    throw new Error("Scenario administration requires the Electron app.");
   }
-  return window.missionDashboardDesktop.adminCloudRequest(path, options);
+  return window.missionDashboardDesktop.localAdminRequest(path, options);
 }

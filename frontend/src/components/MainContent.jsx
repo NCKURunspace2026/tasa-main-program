@@ -10,12 +10,12 @@ const pages = {
   settings: Settings,
 };
 
-export default function MainContent({ currentPage, onNavigate, runtimeConfig }) {
+export default function MainContent({ currentPage, onNavigate }) {
   const CurrentPageComponent = pages[currentPage] ?? Submissions;
 
   return (
     <main className="main-content">
-      <CurrentPageComponent onNavigate={onNavigate} runtimeConfig={runtimeConfig} />
+      <CurrentPageComponent onNavigate={onNavigate} />
     </main>
   );
 }

@@ -4,7 +4,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from ..repositories.submission_repository import find_passed_by_scenario
+from ..repositories.submission_repository import count_passed_by_scenario, find_passed_by_scenario
 
 
 def get_leaderboard(
@@ -14,9 +14,17 @@ def get_leaderboard(
     page_size: int,
     search: Optional[str],
 ) -> dict:
+    start = (page - 1) * page_size
     ranked = []
     for rank, (submission, solution) in enumerate(
-        find_passed_by_scenario(session, scenario_id), start=1
+        find_passed_by_scenario(
+            session,
+            scenario_id,
+            offset=start,
+            limit=page_size,
+            search=search,
+        ),
+        start=start + 1,
     ):
         item = {
             "rank": rank,
@@ -29,16 +37,13 @@ def get_leaderboard(
             "burnCount": len(solution.decision_variables_json.get("burns", [])),
             "status": submission.status,
         }
-        if search and search.lower() not in f"{solution.id} {solution.name}".lower():
-            continue
         ranked.append(item)
 
-    start = (page - 1) * page_size
     return {
         "scenarioId": scenario_id,
         "rankingMetric": "totalScore",
-        "total": len(ranked),
+        "total": count_passed_by_scenario(session, scenario_id, search),
         "page": page,
         "pageSize": page_size,
-        "items": ranked[start:start + page_size],
+        "items": ranked,
     }

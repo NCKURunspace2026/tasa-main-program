@@ -2,10 +2,6 @@ const path = require("node:path");
 const { app, BrowserWindow, ipcMain } = require("electron");
 
 async function run() {
-  ipcMain.handle("runtime:get-config", () => ({
-    role: "client",
-    cloudApiBaseUrl: "https://missiondashboard.fastapicloud.dev/api",
-  }));
   ipcMain.handle("gmat:get-config", () => ({ executablePath: "smoke-gmat" }));
 
   const window = new BrowserWindow({

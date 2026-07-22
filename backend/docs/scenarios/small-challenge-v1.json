@@ -12,8 +12,8 @@
   "coordinateSystem": "EarthMJ2000Eq",
   "units": { "position": "km", "velocity": "km/s", "deltaV": "km/s", "time": "s", "distance": "km" },
   "spacecraft": {
-    "target": { "name": "TargetA", "role": "target", "initialState": { "position": [8457.233587073177, 3078.181289931011, 0.0], "velocity": [-1.864506222331501, 5.122688744288453, 3.817147432373025] } },
-    "chaser": { "name": "ChaserB", "role": "chaser", "initialState": { "position": [7047.694611613806, 2565.151196602205, 0.00009065414689614744], "velocity": [-2.042464377523507, 5.611624308104965, 4.181475508067259] } }
+    "target": { "name": "TargetA", "role": "target", "initialState": { "position": [8457.233587073177, 3078.181289931011, 0.0], "velocity": [-1.864506222331501, 5.122688744288453, 3.817147432373025] }, "physicalProperties": { "dryMassKg": 850.0, "dragAreaM2": 15.0, "srpAreaM2": 1.0, "coefficientOfDrag": 2.2, "coefficientOfReflectivity": 1.8 } },
+    "chaser": { "name": "ChaserB", "role": "chaser", "initialState": { "position": [7047.694611613806, 2565.151196602205, 0.00009065414689614744], "velocity": [-2.042464377523507, 5.611624308104965, 4.181475508067259] }, "physicalProperties": { "dryMassKg": 850.0, "dragAreaM2": 15.0, "srpAreaM2": 1.0, "coefficientOfDrag": 2.2, "coefficientOfReflectivity": 1.8 } }
   },
   "forceModel": { "centralBody": "Earth", "gravity": { "type": "spherical-harmonic", "degree": 2, "order": 0 }, "pointMasses": [], "drag": { "enabled": false, "model": null }, "solarRadiationPressure": { "enabled": false }, "relativisticCorrection": { "enabled": false } },
   "propagator": { "integrator": "RungeKutta89", "initialStepSec": 1.0, "maxStepSec": 1.0, "minStepSec": 0.001, "accuracy": 1e-12 },

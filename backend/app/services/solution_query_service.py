@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Solution, Submission
 from ..models.entities import utc_now
-from ..repositories.solution_repository import find_all, find_by_id
+from ..repositories.solution_repository import find_by_id
 
 
 def get_solution_detail(
@@ -56,32 +56,6 @@ def get_solution_detail(
             "penaltyScore": submission.penalty_score,
         },
     }
-
-
-def list_solutions(
-    session: Session,
-    scenario_id: str | None = None,
-    include_deleted: bool = False,
-) -> list[dict]:
-    items = []
-    for solution in find_all(
-        session,
-        scenario_id=scenario_id,
-        include_deleted=include_deleted,
-    ):
-        submission = session.scalar(
-            select(Submission).where(Submission.solution_id == solution.id)
-        )
-        items.append({
-            "solutionId": solution.id,
-            "scenarioId": solution.scenario_id,
-            "name": solution.name,
-            "status": submission.status if submission else None,
-            "officialScore": submission.total_score if submission else None,
-            "createdAt": solution.created_at.isoformat() if solution.created_at else None,
-            "deletedAt": solution.deleted_at.isoformat() if solution.deleted_at else None,
-        })
-    return items
 
 
 def set_solution_deleted(

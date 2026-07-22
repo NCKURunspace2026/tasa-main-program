@@ -98,7 +98,7 @@ const navigationItems = [
   { id: "leaderboard", label: "Leaderboard", icon: ChartIcon },
 ];
 
-export default function Sidebar({ currentPage, onNavigate, runtimeRole }) {
+export default function Sidebar({ currentPage, onNavigate }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const handleNavigate = (pageId) => onNavigate?.(pageId);
 
@@ -125,9 +125,9 @@ export default function Sidebar({ currentPage, onNavigate, runtimeRole }) {
         }
       >
         <div className="sidebar-content">
-          <div className={`sidebar-role sidebar-role-${runtimeRole}`}>
+          <div className="sidebar-role sidebar-role-local">
             <span />
-            <strong>{runtimeRole === "worker" ? "OFFICIAL VALIDATOR" : "CLOUD CONNECTED"}</strong>
+            <strong>LOCAL DATABASE</strong>
           </div>
           <SideNavSection title="Competition">
             {navigationItems.map(({ id, label, icon }) => (

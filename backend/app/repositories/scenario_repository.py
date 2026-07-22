@@ -6,12 +6,6 @@ from sqlalchemy.orm import Session
 from ..models import Scenario
 
 
-def find_all_active(session: Session) -> list[Scenario]:
-    return list(session.scalars(
-        select(Scenario).where(Scenario.status == "active").order_by(Scenario.id)
-    ).all())
-
-
 def find_all(session: Session) -> list[Scenario]:
     return list(session.scalars(select(Scenario).order_by(Scenario.id)).all())
 

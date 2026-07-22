@@ -1,6 +1,6 @@
 [project]
 name = "mission-dashboard-backend"
-version = "0.2.0"
+version = "0.2.4"
 requires-python = ">=3.11,<3.15"
 dependencies = [
   "fastapi[standard]==0.116.1",

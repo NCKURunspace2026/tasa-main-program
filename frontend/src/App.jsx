@@ -10,18 +10,10 @@ export default function App() {
     : "submissions";
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [gmatConfig, setGmatConfig] = useState(null);
-  const [runtimeConfig, setRuntimeConfig] = useState(null);
 
   useEffect(() => {
-    const fallbackRuntime = {
-      role: "client",
-    };
-    window.missionDashboardDesktop?.getRuntimeConfig?.()
-      .then(setRuntimeConfig)
-      .catch(() => setRuntimeConfig(fallbackRuntime));
     if (!window.missionDashboardDesktop?.getGmatConfig) {
       setGmatConfig({ executablePath: "browser-preview" });
-      setRuntimeConfig(fallbackRuntime);
       return;
     }
     window.missionDashboardDesktop.getGmatConfig()
@@ -51,13 +43,11 @@ export default function App() {
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
-        runtimeRole={runtimeConfig?.role ?? "client"}
       />
 
       <MainContent
         currentPage={currentPage}
         onNavigate={handleNavigate}
-        runtimeConfig={runtimeConfig}
       />
     </div>
   );

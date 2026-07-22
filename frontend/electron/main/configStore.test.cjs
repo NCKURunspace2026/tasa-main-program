@@ -3,7 +3,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { resolveGmatInstallation } = require("./configStore.cjs");
+const {
+  createPasswordRecord,
+  resolveGmatInstallation,
+  verifyPassword,
+} = require("./configStore.cjs");
 
 function withTemporaryGmat(executableName, callback) {
   const installationPath = fs.mkdtempSync(path.join(os.tmpdir(), "mission-dashboard-config-"));
@@ -34,4 +38,12 @@ test("resolves the Windows GmatConsole.exe executable", () => {
       executablePath,
     });
   });
+});
+
+test("stores only a salted administration password hash", () => {
+  const record = createPasswordRecord("correct horse");
+  assert.equal(record.adminPasswordHash.includes("correct horse"), false);
+  assert.equal(verifyPassword("correct horse", record), true);
+  assert.equal(verifyPassword("wrong password", record), false);
+  assert.throws(() => createPasswordRecord("short"), /at least 6/);
 });

@@ -1,8 +1,22 @@
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const path = require("node:path");
 const test = require("node:test");
 
-const { resolveBackendCommand } = require("./localBackend.cjs");
+const { findAvailablePort, resolveBackendCommand } = require("./localBackend.cjs");
+
+test("selects an available loopback port for each app instance", async () => {
+  const fakeServer = new EventEmitter();
+  fakeServer.unref = () => {};
+  fakeServer.address = () => ({ port: 43125 });
+  fakeServer.listen = (_port, host, callback) => {
+    assert.equal(host, "127.0.0.1");
+    callback();
+  };
+  fakeServer.close = (callback) => callback();
+  const port = await findAvailablePort("127.0.0.1", () => fakeServer);
+  assert.equal(port, 43125);
+});
 
 test("resolves the packaged macOS local backend", () => {
   const result = resolveBackendCommand({
