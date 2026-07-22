@@ -251,11 +251,6 @@
   opacity: 0.55;
 }
 
-.settings-danger-button {
-  border-color: rgba(248, 113, 113, 0.35);
-  color: #fca5a5;
-}
-
 .scenario-limits-form > .settings-primary-button {
   margin: 16px 20px;
 }
@@ -381,19 +376,6 @@
 
 .scenario-admin-list strong { color: #78b7f2; }
 .scenario-admin-list span { color: var(--text-secondary); }
-
-.settings-data-note {
-  margin: 0;
-  padding: 0 20px 4px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.solution-admin-list > p {
-  margin: 0;
-  padding: 16px 20px;
-  color: var(--text-secondary);
-}
 
 .settings-message {
   margin: 0;

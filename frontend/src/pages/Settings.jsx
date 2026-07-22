@@ -5,13 +5,10 @@ import "./Settings.css";
 import PageHeader from "../components/PageHeader.jsx";
 import {
   createScenario,
-  deleteSolution,
   downloadDataExport,
   getCloudAddress,
   getScenarios,
   getSyncSettings,
-  getSolutions,
-  restoreSolution,
   setCloudAddress,
   testCloudConnection,
   runDataSync,
@@ -151,7 +148,6 @@ export default function Settings({ runtimeConfig }) {
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
   const [isSavingScenario, setIsSavingScenario] = useState(false);
-  const [solutions, setSolutions] = useState([]);
   const [updateStatus, setUpdateStatus] = useState(null);
 
   useEffect(() => {
@@ -208,16 +204,6 @@ export default function Settings({ runtimeConfig }) {
       unsubscribe?.();
     };
   }, []);
-
-  useEffect(() => {
-    if (!canAdmin || !selectedScenarioId) {
-      setSolutions([]);
-      return;
-    }
-    getSolutions({ scenarioId: selectedScenarioId, includeDeleted: true })
-      .then((result) => setSolutions(result.items))
-      .catch((error) => setMessage(error.message));
-  }, [canAdmin, selectedScenarioId]);
 
   function updateSetting(event) {
     const { name, value, type, checked } = event.target;
@@ -447,28 +433,6 @@ export default function Settings({ runtimeConfig }) {
       setMessage(error.message);
     } finally {
       setIsSavingScenario(false);
-    }
-  }
-
-  async function changeSolutionStatus(solution) {
-    if (
-      !solution.deletedAt
-      && !window.confirm(
-        `Remove ${solution.solutionId} from the Leaderboard? Its Solution and Submission data remain available for export and Machine Learning.`,
-      )
-    ) return;
-    try {
-      const updated = solution.deletedAt
-        ? await restoreSolution(solution.solutionId)
-        : await deleteSolution(solution.solutionId);
-      setSolutions((current) => current.map((item) => (
-        item.solutionId === updated.solutionId
-          ? { ...item, deletedAt: updated.deletedAt }
-          : item
-      )));
-      setMessage(`${updated.solutionId} ${updated.deletedAt ? "archived" : "restored"}. The ML record remains stored.`);
-    } catch (error) {
-      setMessage(error.message);
     }
   }
 
@@ -730,22 +694,10 @@ export default function Settings({ runtimeConfig }) {
                   </article>
                 ))}
               </div>
-              <div className="scenario-admin-divider"><span>Solutions and ML dataset</span></div>
-              <p className="settings-data-note">Archive hides a Solution from the leaderboard without deleting its submissions or validation data.</p>
+              <div className="scenario-admin-divider"><span>Data export</span></div>
               <div className="settings-inline-actions scenario-form-actions">
                 <button className="settings-secondary-button" type="button" onClick={() => exportDataset("jsonl")}>Export JSONL</button>
                 <button className="settings-secondary-button" type="button" onClick={() => exportDataset("csv")}>Export CSV</button>
-              </div>
-              <div className="scenario-admin-list solution-admin-list">
-                {solutions.length === 0 ? <p>No Solutions for this Scenario.</p> : null}
-                {solutions.map((solution) => (
-                  <article key={solution.solutionId}>
-                    <div><strong>{solution.solutionId}</strong><span>{solution.name} · {solution.deletedAt ? "archived" : solution.status}</span></div>
-                    <button className={`settings-secondary-button${solution.deletedAt ? "" : " settings-danger-button"}`} type="button" onClick={() => changeSolutionStatus(solution)}>
-                      {solution.deletedAt ? "Restore" : "Remove"}
-                    </button>
-                  </article>
-                ))}
               </div>
             </SettingsSection>
           ) : null}
