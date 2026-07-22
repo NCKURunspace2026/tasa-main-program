@@ -119,6 +119,29 @@ def test_server_can_validate_and_publish_scenario_json():
         assert client.get("/api/scenarios/SC-003").status_code == 200
 
 
+def test_scenario_force_model_is_normalized_and_validated():
+    definition = scenario_json()
+    definition["forceModel"] = {
+        "centralBody": "Earth",
+        "gravity": {"enabled": True, "degree": 4, "order": 2},
+        "pointMasses": ["Sun", "Luna"],
+        "drag": {"enabled": True, "model": "JacchiaRoberts"},
+        "solarRadiationPressure": {"enabled": True},
+        "relativisticCorrection": {"enabled": True},
+    }
+    with TestClient(app) as client:
+        parsed = client.post("/api/scenarios/parse", json={"scenarioJson": definition})
+        assert parsed.status_code == 200
+        force_model = parsed.json()["scenarioJson"]["forceModel"]
+        assert force_model["gravity"]["degree"] == 4
+        assert force_model["pointMasses"] == ["Sun", "Luna"]
+        assert force_model["drag"]["model"] == "JacchiaRoberts"
+
+        definition["forceModel"]["gravity"]["order"] = 5
+        invalid = client.post("/api/scenarios/parse", json={"scenarioJson": definition})
+        assert invalid.status_code == 422
+
+
 def test_only_server_can_update_published_scenario_limits():
     with TestClient(app) as client:
         current = client.get("/api/scenarios/SC-001").json()
@@ -241,10 +264,9 @@ def test_soft_delete_hides_records_but_keeps_archives_and_exports():
         assert client.post(f"/api/solutions/{solution_id}/restore").status_code == 200
         assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 1
 
-        assert client.delete("/api/scenarios/SC-001").status_code == 200
-        assert client.get("/api/scenarios").json()["items"] == []
-        inactive = client.get("/api/scenarios?includeInactive=true").json()["items"]
-        assert inactive[0]["status"] == "inactive"
+        assert client.delete("/api/scenarios/SC-001").status_code == 409
+        active = client.get("/api/scenarios").json()["items"]
+        assert active[0]["status"] == "active"
         assert client.post("/api/scenarios/SC-001/restore").status_code == 200
 
 

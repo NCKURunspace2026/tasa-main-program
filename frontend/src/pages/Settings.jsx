@@ -5,14 +5,12 @@ import "./Settings.css";
 import PageHeader from "../components/PageHeader.jsx";
 import {
   createScenario,
-  deleteScenario,
   deleteSolution,
   downloadDataExport,
   getCloudAddress,
   getScenarios,
   getSyncSettings,
   getSolutions,
-  restoreScenario,
   restoreSolution,
   setCloudAddress,
   testCloudConnection,
@@ -31,7 +29,6 @@ const sections = [
 const defaultSettings = {
   cloudAddress: getCloudAddress(),
   syncEnabled: true,
-  syncSharedKey: "",
   gmatExecutablePath: "",
   validationTimeout: "120",
   keepTemporaryFiles: false,
@@ -39,6 +36,17 @@ const defaultSettings = {
 };
 
 const emptyScenarioLimits = {
+  centralBody: "Earth",
+  gravityEnabled: true,
+  gravityDegree: "2",
+  gravityOrder: "0",
+  pointMassSun: false,
+  pointMassLuna: false,
+  dragEnabled: false,
+  dragModel: "JacchiaRoberts",
+  solarRadiationPressureEnabled: false,
+  relativisticCorrectionEnabled: false,
+  propagatorIntegrator: "RungeKutta89",
   initialStepSec: "",
   maxStepSec: "",
   minStepSec: "",
@@ -60,12 +68,66 @@ const emptyScenarioLimits = {
   deltaVWeight: "",
 };
 
-const emptyScenario = {
+const starterScenarioDefinition = {
+  schemaVersion: 1,
+  epoch: { value: "29 Aug 2026 05:00:00.000", timeSystem: "UTCGregorian" },
+  coordinateSystem: "EarthMJ2000Eq",
+  spacecraft: {
+    target: {
+      stateType: "Cartesian",
+      positionKm: [7000, 0, 0],
+      velocityKmPerSec: [0, 7.546, 0],
+    },
+    chaser: {
+      stateType: "Cartesian",
+      positionKm: [6990, 0, 0],
+      velocityKmPerSec: [0, 7.55, 0],
+    },
+  },
+  forceModel: {
+    centralBody: "Earth",
+    gravity: { type: "spherical-harmonic", enabled: true, degree: 2, order: 0 },
+    pointMasses: [],
+    drag: { enabled: false, model: null },
+    solarRadiationPressure: { enabled: false },
+    relativisticCorrection: { enabled: false },
+  },
+  propagator: {
+    integrator: "RungeKutta89",
+    initialStepSec: 1,
+    maxStepSec: 1,
+    minStepSec: 0.001,
+    accuracy: 1e-12,
+  },
+  validation: {
+    requiredFinalDistanceKm: 5,
+    maximumTotalDeltaV: 1.5,
+    maximumMissionTimeSec: 20000,
+    minimumBurnCount: 1,
+    maximumBurnCount: 5,
+    minimumBurnSeparationSec: 100,
+  },
+  scoreConfig: {
+    distanceReferenceKm: 5,
+    distanceDecayKm: 100,
+    timeReferenceSec: 5000,
+    timeSlope: 0.001,
+    deltaVReferenceKmPerSec: 0.5,
+    deltaVSlope: 10,
+    distanceWeight: 50,
+    timeWeight: 25,
+    deltaVWeight: 25,
+  },
+};
+
+function newScenarioForm() {
+  return {
   scenarioId: "",
   name: "",
   description: "",
-  scenarioJson: "{}",
-};
+    scenarioJson: JSON.stringify(starterScenarioDefinition, null, 2),
+  };
+}
 
 function loadSettings() {
   try {
@@ -84,7 +146,7 @@ export default function Settings({ runtimeConfig }) {
   const [settings, setSettings] = useState(loadSettings);
   const [message, setMessage] = useState("");
   const [scenarios, setScenarios] = useState([]);
-  const [scenarioForm, setScenarioForm] = useState(emptyScenario);
+  const [scenarioForm, setScenarioForm] = useState(newScenarioForm);
   const [isPublishing, setIsPublishing] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
@@ -171,7 +233,6 @@ export default function Settings({ runtimeConfig }) {
       await updateSyncSettings({
         peerUrl: settings.cloudAddress,
         enabled: settings.syncEnabled,
-        ...(settings.syncSharedKey ? { sharedKey: settings.syncSharedKey } : {}),
       });
       window.localStorage.setItem("mission-dashboard-settings", JSON.stringify(settings));
       await window.missionDashboardDesktop?.saveGmatConfig?.({
@@ -253,7 +314,7 @@ export default function Settings({ runtimeConfig }) {
       setScenarios((current) => [...current, created].sort(
         (left, right) => left.scenarioId.localeCompare(right.scenarioId),
       ));
-      setScenarioForm(emptyScenario);
+      setScenarioForm(newScenarioForm());
       setMessage(`${created.scenarioId} published.`);
     } catch (error) {
       setMessage(error instanceof SyntaxError
@@ -291,8 +352,11 @@ export default function Settings({ runtimeConfig }) {
   }
 
   function updateScenarioLimit(event) {
-    const { name, value } = event.target;
-    setScenarioLimits((current) => ({ ...current, [name]: value }));
+    const { name, value, type, checked } = event.target;
+    setScenarioLimits((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   }
 
   async function saveScenarioLimits(event) {
@@ -303,8 +367,40 @@ export default function Settings({ runtimeConfig }) {
     setMessage("");
     try {
       const scenarioJson = structuredClone(scenario.scenarioJson);
+      const gravityDegree = nonNegativeInteger(scenarioLimits.gravityDegree, "Gravity degree");
+      const gravityOrder = nonNegativeInteger(scenarioLimits.gravityOrder, "Gravity order");
+      if (gravityOrder > gravityDegree) {
+        throw new Error("Gravity order cannot be greater than gravity degree.");
+      }
+      if (scenarioLimits.dragEnabled && scenarioLimits.centralBody !== "Earth") {
+        throw new Error("The available atmosphere models currently support Earth only.");
+      }
+      scenarioJson.forceModel = {
+        centralBody: scenarioLimits.centralBody,
+        gravity: {
+          type: "spherical-harmonic",
+          enabled: scenarioLimits.gravityEnabled,
+          degree: gravityDegree,
+          order: gravityOrder,
+        },
+        pointMasses: [
+          ...(scenarioLimits.pointMassSun ? ["Sun"] : []),
+          ...(scenarioLimits.pointMassLuna ? ["Luna"] : []),
+        ],
+        drag: {
+          enabled: scenarioLimits.dragEnabled,
+          model: scenarioLimits.dragEnabled ? scenarioLimits.dragModel : null,
+        },
+        solarRadiationPressure: {
+          enabled: scenarioLimits.solarRadiationPressureEnabled,
+        },
+        relativisticCorrection: {
+          enabled: scenarioLimits.relativisticCorrectionEnabled,
+        },
+      };
       scenarioJson.propagator = {
         ...scenarioJson.propagator,
+        integrator: scenarioLimits.propagatorIntegrator,
         initialStepSec: positiveNumber(scenarioLimits.initialStepSec, "Initial step"),
         maxStepSec: positiveNumber(scenarioLimits.maxStepSec, "Maximum step"),
         minStepSec: positiveNumber(scenarioLimits.minStepSec, "Minimum step"),
@@ -354,26 +450,6 @@ export default function Settings({ runtimeConfig }) {
     }
   }
 
-  async function changeScenarioStatus(scenario) {
-    if (
-      scenario.status === "active"
-      && !window.confirm(
-        `Remove ${scenario.scenarioId} from active Scenario lists? Its database record remains available for export and Machine Learning.`,
-      )
-    ) return;
-    try {
-      const updated = scenario.status === "active"
-        ? await deleteScenario(scenario.scenarioId)
-        : await restoreScenario(scenario.scenarioId);
-      setScenarios((current) => current.map((item) => (
-        item.scenarioId === updated.scenarioId ? updated : item
-      )));
-      setMessage(`${updated.scenarioId} is now ${updated.status}. No database rows were deleted.`);
-    } catch (error) {
-      setMessage(error.message);
-    }
-  }
-
   async function changeSolutionStatus(solution) {
     if (
       !solution.deletedAt
@@ -404,8 +480,6 @@ export default function Settings({ runtimeConfig }) {
       setMessage(error.message);
     }
   }
-
-  const selectedScenario = scenarios.find((item) => item.scenarioId === selectedScenarioId);
 
   return (
     <section className="settings-page">
@@ -456,18 +530,6 @@ export default function Settings({ runtimeConfig }) {
                   type="checkbox"
                   checked={settings.syncEnabled}
                   onChange={updateSetting}
-                />
-              </SettingsRow>
-              <SettingsRow
-                label="Shared sync key"
-                description="Leave blank to keep the key already saved in the local database."
-              >
-                <input
-                  name="syncSharedKey"
-                  type="password"
-                  value={settings.syncSharedKey}
-                  onChange={updateSetting}
-                  autoComplete="off"
                 />
               </SettingsRow>
               <div className="settings-inline-actions scenario-form-actions">
@@ -560,20 +622,25 @@ export default function Settings({ runtimeConfig }) {
                     ))}
                   </select>
                 </SettingsRow>
-                {selectedScenario ? (
-                  <div className="scenario-selected-actions">
-                    <button
-                      className="settings-secondary-button settings-danger-button"
-                      type="button"
-                      onClick={() => changeScenarioStatus(selectedScenario)}
-                    >
-                      {selectedScenario.status === "active" ? "Remove Scenario From List" : "Restore Scenario"}
-                    </button>
-                    <span>No database rows are deleted; the Scenario remains available for export and Machine Learning.</span>
-                  </div>
-                ) : null}
+                <div className="scenario-limit-heading">Force Model</div>
+                <p className="scenario-model-note">
+                  Central-body point-mass gravity is always applied. Gravity field enables spherical harmonics above that baseline.
+                </p>
+                <div className="scenario-parameter-grid">
+                  <ScenarioSelectField label="Central body" description="Propagation origin and primary body" name="centralBody" value={scenarioLimits.centralBody} onChange={updateScenarioLimit} options={["Earth"]} />
+                  <ScenarioToggleField label="Gravity field" description="Spherical-harmonic gravity" name="gravityEnabled" checked={scenarioLimits.gravityEnabled} onChange={updateScenarioLimit} />
+                  <ScenarioNumberField label="Degree" description="Gravity harmonic degree" name="gravityDegree" value={scenarioLimits.gravityDegree} onChange={updateScenarioLimit} integer allowZero disabled={!scenarioLimits.gravityEnabled} />
+                  <ScenarioNumberField label="Order" description="Gravity harmonic order" name="gravityOrder" value={scenarioLimits.gravityOrder} onChange={updateScenarioLimit} integer allowZero disabled={!scenarioLimits.gravityEnabled} />
+                  <ScenarioToggleField label="Sun" description="Sun point-mass perturbation" name="pointMassSun" checked={scenarioLimits.pointMassSun} onChange={updateScenarioLimit} />
+                  <ScenarioToggleField label="Luna" description="Moon point-mass perturbation" name="pointMassLuna" checked={scenarioLimits.pointMassLuna} onChange={updateScenarioLimit} />
+                  <ScenarioToggleField label="Drag" description="Earth atmospheric drag" name="dragEnabled" checked={scenarioLimits.dragEnabled} onChange={updateScenarioLimit} />
+                  <ScenarioSelectField label="Atmosphere" description="GMAT atmosphere model" name="dragModel" value={scenarioLimits.dragModel} onChange={updateScenarioLimit} options={["JacchiaRoberts", "MSISE90"]} disabled={!scenarioLimits.dragEnabled} />
+                  <ScenarioToggleField label="SRP" description="Solar radiation pressure" name="solarRadiationPressureEnabled" checked={scenarioLimits.solarRadiationPressureEnabled} onChange={updateScenarioLimit} />
+                  <ScenarioToggleField label="Relativity" description="Relativistic correction" name="relativisticCorrectionEnabled" checked={scenarioLimits.relativisticCorrectionEnabled} onChange={updateScenarioLimit} />
+                </div>
                 <div className="scenario-limit-heading">Propagator</div>
                 <div className="scenario-parameter-grid">
+                  <ScenarioSelectField label="Integrator" description="GMAT numerical integrator" name="propagatorIntegrator" value={scenarioLimits.propagatorIntegrator} onChange={updateScenarioLimit} options={["RungeKutta89", "PrinceDormand78", "RungeKutta68", "RungeKutta56"]} />
                   <ScenarioNumberField label="h0" description="Initial integration step, s" name="initialStepSec" value={scenarioLimits.initialStepSec} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="hmax" description="Maximum integration step, s" name="maxStepSec" value={scenarioLimits.maxStepSec} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="hmin" description="Minimum integration step, s" name="minStepSec" value={scenarioLimits.minStepSec} onChange={updateScenarioLimit} />
@@ -609,10 +676,25 @@ export default function Settings({ runtimeConfig }) {
                 </button>
               </form>
               <div className="scenario-admin-divider"><span>Publish another Scenario</span></div>
+              <div className="scenario-schema-guide">
+                <strong>Scenario JSON map</strong>
+                <div>
+                  <code>epoch</code><span>Initial epoch and time system</span>
+                  <code>spacecraft.target / chaser</code><span>Cartesian position (km) and velocity (km/s)</span>
+                  <code>forceModel</code><span>Gravity, third bodies, drag, SRP, and relativity</span>
+                  <code>propagator</code><span>Integrator type, step sizes, and accuracy</span>
+                  <code>validation</code><span>Mission and maneuver constraints</span>
+                  <code>scoreConfig</code><span>Leaderboard score parameters</span>
+                </div>
+                <p>The editor below starts with a complete runnable template. Replace its example state vectors before publishing.</p>
+              </div>
               <label className="settings-secondary-button settings-file-button">
                 Load JSON Package
                 <input type="file" accept=".json" onChange={uploadScenario} hidden />
               </label>
+              <button className="settings-secondary-button scenario-template-button" type="button" onClick={() => setScenarioForm(newScenarioForm())}>
+                Reset to Complete Template
+              </button>
               <form className="scenario-create-form" onSubmit={publishScenario}>
                 <SettingsRow label="Scenario ID">
                   <input name="scenarioId" value={scenarioForm.scenarioId} onChange={updateScenario} placeholder="SC-003" required />
@@ -630,9 +712,13 @@ export default function Settings({ runtimeConfig }) {
                     value={scenarioForm.scenarioJson}
                     onChange={updateScenario}
                     spellCheck="false"
+                    aria-describedby="scenario-json-help"
                     required
                   />
                 </SettingsRow>
+                <p className="scenario-json-help" id="scenario-json-help">
+                  Units are fixed: position km, velocity and Delta-V km/s, time s. Coordinate frames must match the supplied state vectors.
+                </p>
                 <button className="settings-primary-button" type="submit" disabled={isPublishing}>
                   {isPublishing ? "Publishing…" : "Publish Scenario"}
                 </button>
@@ -640,10 +726,7 @@ export default function Settings({ runtimeConfig }) {
               <div className="scenario-admin-list">
                 {scenarios.map((scenario) => (
                   <article key={scenario.scenarioId}>
-                    <div><strong>{scenario.scenarioId}</strong><span>{scenario.name} · {scenario.status}</span></div>
-                    <button className={`settings-secondary-button${scenario.status === "active" ? " settings-danger-button" : ""}`} type="button" onClick={() => changeScenarioStatus(scenario)}>
-                      {scenario.status === "active" ? "Remove" : "Restore"}
-                    </button>
+                    <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
                   </article>
                 ))}
               </div>
@@ -674,7 +757,7 @@ export default function Settings({ runtimeConfig }) {
   );
 }
 
-function ScenarioNumberField({ label, description, name, value, onChange, integer = false, allowZero = false }) {
+function ScenarioNumberField({ label, description, name, value, onChange, integer = false, allowZero = false, disabled = false }) {
   return (
     <SettingsRow label={label} description={description}>
       <input
@@ -684,8 +767,30 @@ function ScenarioNumberField({ label, description, name, value, onChange, intege
         step={integer ? "1" : "any"}
         min={allowZero || name === "requiredFinalDistanceKm" || name === "minimumBurnSeparationSec" ? "0" : "0.000000000001"}
         onChange={onChange}
+        disabled={disabled}
         required
       />
+    </SettingsRow>
+  );
+}
+
+function ScenarioToggleField({ label, description, name, checked, onChange }) {
+  return (
+    <SettingsRow label={label} description={description}>
+      <span className="scenario-toggle">
+        <input type="checkbox" name={name} checked={checked} onChange={onChange} />
+        <span>{checked ? "Enabled" : "Disabled"}</span>
+      </span>
+    </SettingsRow>
+  );
+}
+
+function ScenarioSelectField({ label, description, name, value, onChange, options, disabled = false }) {
+  return (
+    <SettingsRow label={label} description={description}>
+      <select name={name} value={value} onChange={onChange} disabled={disabled}>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
     </SettingsRow>
   );
 }
@@ -694,10 +799,26 @@ function readScenarioLimits(definition) {
   const propagator = definition.propagator ?? {};
   const validation = definition.validation ?? {};
   const scoreConfig = definition.scoreConfig ?? {};
-  return Object.fromEntries(Object.keys(emptyScenarioLimits).map((key) => [
-    key,
-    String(propagator[key] ?? validation[key] ?? scoreConfig[key] ?? ""),
-  ]));
+  const forceModel = definition.forceModel ?? {};
+  const gravity = forceModel.gravityField ?? forceModel.gravity ?? {};
+  const pointMasses = Array.isArray(forceModel.pointMasses) ? forceModel.pointMasses : [];
+  return {
+    ...Object.fromEntries(Object.keys(emptyScenarioLimits).map((key) => [
+      key,
+      String(propagator[key] ?? validation[key] ?? scoreConfig[key] ?? ""),
+    ])),
+    centralBody: forceModel.centralBody ?? "Earth",
+    gravityEnabled: gravity.enabled ?? Object.keys(gravity).length > 0,
+    gravityDegree: String(gravity.degree ?? 0),
+    gravityOrder: String(gravity.order ?? 0),
+    pointMassSun: pointMasses.includes("Sun"),
+    pointMassLuna: pointMasses.includes("Luna"),
+    dragEnabled: Boolean(forceModel.drag?.enabled),
+    dragModel: forceModel.drag?.model ?? "JacchiaRoberts",
+    solarRadiationPressureEnabled: Boolean(forceModel.solarRadiationPressure?.enabled),
+    relativisticCorrectionEnabled: Boolean(forceModel.relativisticCorrection?.enabled),
+    propagatorIntegrator: propagator.integrator ?? "RungeKutta89",
+  };
 }
 
 function positiveNumber(value, label) {
@@ -714,6 +835,12 @@ function nonNegativeNumber(value, label) {
 
 function positiveInteger(value, label) {
   const number = positiveNumber(value, label);
+  if (!Number.isInteger(number)) throw new Error(`${label} must be an integer.`);
+  return number;
+}
+
+function nonNegativeInteger(value, label) {
+  const number = nonNegativeNumber(value, label);
   if (!Number.isInteger(number)) throw new Error(`${label} must be an integer.`);
   return number;
 }

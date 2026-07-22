@@ -99,6 +99,13 @@ def initialize_database() -> None:
                 propagator["maxStepSec"] = 1.0
                 scenario_definition["propagator"] = propagator
                 scenario.scenario_json = scenario_definition
+        session.query(Scenario).filter(Scenario.status != "active").update(
+            {
+                Scenario.status: "active",
+                Scenario.updated_at: datetime.now(timezone.utc),
+            },
+            synchronize_session=False,
+        )
 
 
 def _add_queue_lease_columns_for_existing_database() -> None:

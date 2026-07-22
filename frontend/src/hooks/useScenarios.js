@@ -2,25 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getScenarios } from "../services/api.js";
 
-const fallbackScenarios = [
-  {
-    scenarioId: "SC-001",
-    name: "LEO Interception",
-    description: "",
-    scenarioJson: {},
-    isActive: true,
-  },
-  {
-    scenarioId: "SC-002",
-    name: "Orbital Rendezvous",
-    description: "",
-    scenarioJson: {},
-    isActive: true,
-  },
-];
-
 export default function useScenarios() {
-  const [scenarios, setScenarios] = useState(fallbackScenarios);
+  const [scenarios, setScenarios] = useState([]);
   const [scenarioError, setScenarioError] = useState("");
   const [scenariosLoaded, setScenariosLoaded] = useState(false);
 
@@ -29,7 +12,7 @@ export default function useScenarios() {
     getScenarios()
       .then((result) => {
         if (isCurrent) {
-          if (result.items.length > 0) setScenarios(result.items);
+          setScenarios(result.items);
           setScenarioError("");
           setScenariosLoaded(true);
         }

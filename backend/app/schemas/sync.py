@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,7 +11,6 @@ class StrictModel(BaseModel):
 
 class SyncSettingsUpdate(StrictModel):
     peerUrl: str = Field(min_length=1, max_length=500)
-    sharedKey: Optional[str] = Field(default=None, max_length=256)
     enabled: bool = True
 
 

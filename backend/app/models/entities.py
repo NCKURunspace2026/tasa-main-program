@@ -91,7 +91,6 @@ class SyncSetting(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     peer_url: Mapped[Optional[str]] = mapped_column(String(500))
-    shared_key: Mapped[Optional[str]] = mapped_column(String(256))
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[Optional[str]] = mapped_column(Text)

@@ -65,6 +65,20 @@ SQLite 使用條件式 update 避免同一裝置的多 Worker 同時領取同一
 
 Scenario 保存固定物理環境；Decision Variables 只能存在 Solution。
 
+### Force Model
+
+`scenarioJson.forceModel` 是 GMAT ForceModel 的唯一設定來源：
+
+- `centralBody`：目前管理介面限定 `Earth`。
+- `gravity.enabled`：是否使用球諧重力；關閉時仍保留中心天體點質量重力（degree/order 皆為 0）。
+- `gravity.degree` / `gravity.order`：非負整數，且 order 不得大於 degree。
+- `pointMasses`：可加入 `Sun`、`Luna` 等第三體，不能重複加入 central body。
+- `drag`：Earth 可選 `JacchiaRoberts` 或 `MSISE90`。
+- `solarRadiationPressure.enabled`：對應 GMAT R2026a 的 `FM.SRP = On/Off`。
+- `relativisticCorrection`：布林開關。
+
+Electron 產生 GMAT script 時必須逐項寫入上述設定，不得再硬編碼成固定 Earth-only model。Scenario epoch 可使用 ISO 8601 UTC 或 GMAT UTCGregorian；產生器會轉成 GMAT 接受的 UTCGregorian 字串。
+
 ## 健康狀態
 
 `GET /health`：

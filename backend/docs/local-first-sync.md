@@ -39,7 +39,7 @@ sequenceDiagram
 - `PUT /api/sync/settings`（只允許 Local 角色）
 - `POST /api/sync/run`（只允許 Local 角色）
 
-Relay 角色的交換端點使用 `X-Sync-Key`，其值必須等於環境變數 `MISSION_DASHBOARD_SYNC_KEY`。Relay 若未設定金鑰會回傳 HTTP 503。
+Relay 交換端點不要求 Shared Key；每台裝置只要設定相同 Relay 地址並啟用同步即可交換資料。這個 pre-auth 模式只適合目前的非敏感團隊研究資料，不應直接用於公開競賽或敏感資料。
 
 ## Recovery
 

@@ -201,8 +201,7 @@
 
 .scenario-parameter-grid .settings-row input[type="number"] { max-width: none; }
 
-.scenario-score-formula,
-.scenario-selected-actions {
+.scenario-score-formula {
   margin: 0 20px 14px;
   padding: 14px;
   border: 1px solid rgba(120, 183, 242, 0.18);
@@ -223,17 +222,33 @@
   white-space: nowrap;
 }
 
-.scenario-score-formula span,
-.scenario-selected-actions span {
+.scenario-score-formula span {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.scenario-selected-actions {
+.scenario-model-note {
+  margin: 0 20px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scenario-toggle {
+  min-height: 42px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.scenario-toggle input { accent-color: #78b7f2; }
+
+.scenario-parameter-grid :disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settings-danger-button {
@@ -315,6 +330,38 @@
   align-items: center;
 }
 
+.scenario-template-button { margin: 16px 20px 16px 0; }
+
+.scenario-schema-guide {
+  margin: 16px 20px 0;
+  padding: 16px;
+  border: 1px solid rgba(120, 183, 242, 0.2);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.scenario-schema-guide > strong { color: var(--text-primary); }
+
+.scenario-schema-guide > div {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(150px, auto) minmax(0, 1fr);
+  gap: 8px 14px;
+}
+
+.scenario-schema-guide code { color: #78b7f2; }
+
+.scenario-schema-guide span,
+.scenario-schema-guide p,
+.scenario-json-help {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scenario-schema-guide p { margin: 12px 0 0; }
+.scenario-json-help { margin: 0 20px 8px; }
+
 .scenario-admin-list { border-top: 1px solid var(--border); }
 
 .scenario-admin-list article {
@@ -371,5 +418,5 @@
   .settings-input-action { grid-template-columns: 1fr; }
   .system-status-grid { grid-template-columns: 1fr; }
   .scenario-parameter-grid { grid-template-columns: 1fr; }
-  .scenario-selected-actions { align-items: stretch; flex-direction: column; }
+  .scenario-schema-guide > div { grid-template-columns: 1fr; gap: 4px; }
 }

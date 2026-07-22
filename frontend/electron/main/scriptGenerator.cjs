@@ -22,17 +22,93 @@ function getFormalScenarioState(scenario, role) {
   };
 }
 
+const CELESTIAL_BODIES = new Set([
+  "Earth", "Luna", "Sun", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune",
+]);
+const ATMOSPHERE_MODELS = new Set(["JacchiaRoberts", "MSISE90"]);
+const INTEGRATORS = new Set(["RungeKutta89", "PrinceDormand78", "RungeKutta68", "RungeKutta56"]);
+
+function requireAllowed(value, allowed, label) {
+  if (!allowed.has(value)) throw new Error(`${label} is not supported by the local GMAT runner.`);
+  return value;
+}
+
+function toGmatUtcGregorian(value) {
+  if (typeof value !== "string") throw new Error("Scenario epoch must be a UTC date string.");
+  const trimmed = value.trim();
+  if (/^\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/.test(trimmed)) {
+    return trimmed;
+  }
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3})\d*)?Z$/);
+  if (!isoMatch) {
+    throw new Error("Scenario epoch must use ISO 8601 UTC or GMAT UTCGregorian format.");
+  }
+  const [, year, month, day, hour, minute, second, fraction = "0"] = isoMatch;
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthIndex = Number(month) - 1;
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isFinite(timestamp) || monthIndex < 0 || monthIndex > 11) {
+    throw new Error("Scenario epoch is not a valid UTC date.");
+  }
+  return `${Number(day)} ${monthNames[monthIndex]} ${year} ${hour}:${minute}:${second}.${fraction.padEnd(3, "0")}`;
+}
+
+function normalizeForceModel(definition) {
+  const forceModel = definition.forceModel ?? {};
+  const centralBody = requireAllowed(forceModel.centralBody ?? "Earth", CELESTIAL_BODIES, "Central body");
+  const gravity = forceModel.gravityField ?? forceModel.gravity ?? {};
+  const gravityEnabled = gravity.enabled ?? Object.keys(gravity).length > 0;
+  const degree = gravityEnabled ? Number(gravity.degree ?? 0) : 0;
+  const order = gravityEnabled ? Number(gravity.order ?? 0) : 0;
+  if (!Number.isInteger(degree) || degree < 0 || !Number.isInteger(order) || order < 0 || order > degree) {
+    throw new Error("Gravity degree and order must be non-negative integers, with order no greater than degree.");
+  }
+  const pointMasses = [...new Set(forceModel.pointMasses ?? [])].map((body) => (
+    requireAllowed(body, CELESTIAL_BODIES, "Point-mass body")
+  ));
+  if (pointMasses.includes(centralBody)) {
+    throw new Error("The central body cannot also be configured as a point-mass perturbation.");
+  }
+  const dragEnabled = Boolean(forceModel.drag?.enabled);
+  if (dragEnabled && centralBody !== "Earth") {
+    throw new Error("The configured atmosphere models currently support Earth only.");
+  }
+  const dragModel = dragEnabled
+    ? requireAllowed(forceModel.drag?.model ?? "JacchiaRoberts", ATMOSPHERE_MODELS, "Atmosphere model")
+    : "None";
+  const srpEnabled = Boolean(forceModel.solarRadiationPressure?.enabled);
+  return {
+    centralBody,
+    degree,
+    order,
+    pointMasses,
+    dragEnabled,
+    dragModel,
+    srpEnabled,
+    relativityEnabled: Boolean(forceModel.relativisticCorrection?.enabled),
+  };
+}
+
 function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
   const definition = scenario.scenarioJson ?? scenario.definition;
   const chaser = getFormalScenarioState(scenario, "chaser") ?? requireState(definition, "chaserInitialState");
   const target = getFormalScenarioState(scenario, "target") ?? requireState(definition, "targetInitialState");
-  const epoch = chaser.epochUtc;
-  if (!epoch || epoch !== target.epochUtc) {
+  const sourceEpoch = chaser.epochUtc;
+  if (!sourceEpoch || sourceEpoch !== target.epochUtc) {
     throw new Error("Chaser and target must use the same epochUtc for local GMAT validation.");
   }
+  const epoch = toGmatUtcGregorian(sourceEpoch);
   const frame = definition.coordinateSystem ?? definition.referenceFrame ?? "EarthMJ2000Eq";
-  const gravity = definition.forceModel?.gravityField ?? definition.forceModel?.gravity;
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(frame)) {
+    throw new Error("Scenario coordinate system contains unsupported characters.");
+  }
+  const forceModel = normalizeForceModel(definition);
   const propagator = definition.propagator ?? {};
+  const integrator = requireAllowed(
+    propagator.integrator ?? "RungeKutta89",
+    INTEGRATORS,
+    "Propagator integrator",
+  );
   const chaserName = "ChaserSC";
   const targetName = "TargetSC";
   const burnDefinitions = finalDecisionVariables.burns.flatMap((burn, index) => {
@@ -57,13 +133,17 @@ function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
       `GMAT ${chaserName}.${key} = ${[...chaser.positionKm, ...chaser.velocityKmPerS][index]};`,
       `GMAT ${targetName}.${key} = ${[...target.positionKm, ...target.velocityKmPerS][index]};`,
     ]),
-    "Create ForceModel FM;", "GMAT FM.CentralBody = Earth;", "GMAT FM.PrimaryBodies = {Earth};",
-    ...(gravity ? [
-      `GMAT FM.GravityField.Earth.Degree = ${gravity.degree};`,
-      `GMAT FM.GravityField.Earth.Order = ${gravity.order};`,
-    ] : []),
+    "Create ForceModel FM;",
+    `GMAT FM.CentralBody = ${forceModel.centralBody};`,
+    `GMAT FM.PrimaryBodies = {${forceModel.centralBody}};`,
+    `GMAT FM.PointMasses = {${forceModel.pointMasses.join(", ")}};`,
+    `GMAT FM.GravityField.${forceModel.centralBody}.Degree = ${forceModel.degree};`,
+    `GMAT FM.GravityField.${forceModel.centralBody}.Order = ${forceModel.order};`,
+    `GMAT FM.Drag.AtmosphereModel = ${forceModel.dragModel};`,
+    `GMAT FM.SRP = ${forceModel.srpEnabled ? "On" : "Off"};`,
+    `GMAT FM.RelativisticCorrection = ${forceModel.relativityEnabled ? "On" : "Off"};`,
     "Create Propagator Prop;", "GMAT Prop.FM = FM;",
-    `GMAT Prop.Type = ${propagator.integrator ?? "RungeKutta89"};`,
+    `GMAT Prop.Type = ${integrator};`,
     `GMAT Prop.InitialStepSize = ${propagator.initialStepSec ?? 60};`,
     `GMAT Prop.MaxStep = ${propagator.maxStepSec ?? 1};`,
     `GMAT Prop.MinStep = ${propagator.minStepSec ?? 0.001};`,

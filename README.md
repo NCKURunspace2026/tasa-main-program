@@ -60,12 +60,11 @@ npm run build
 
 ## Relay Cache 部署
 
-FastAPI Cloud 的 Relay 角色不使用 `DATABASE_URL`；即使 Neon integration 暫時仍保留由平台管理的環境變數，程式也會明確忽略它並使用 `/tmp/mission-dashboard-relay.db`。部署時設定 Relay 角色與組內共享同步金鑰：
+FastAPI Cloud 的 Relay 角色不使用 `DATABASE_URL`；即使 Neon integration 暫時仍保留由平台管理的環境變數，程式也會明確忽略它並使用 `/tmp/mission-dashboard-relay.db`。部署時只需設定 Relay 角色：
 
 ```bash
 cd backend
 .venv/bin/fastapi cloud env set MISSION_DASHBOARD_NODE_ROLE relay
-.venv/bin/fastapi cloud env set MISSION_DASHBOARD_SYNC_KEY '<long-random-team-key>'
 .venv/bin/fastapi deploy .
 ```
 
@@ -73,15 +72,14 @@ cd backend
 
 ```bash
 curl https://missiondashboard.fastapicloud.dev/health
-curl -H 'X-Sync-Key: <long-random-team-key>' \
-  https://missiondashboard.fastapicloud.dev/api/sync/manifest
+curl https://missiondashboard.fastapicloud.dev/api/sync/manifest
 ```
 
-`/health` 應顯示 `database: "sqlite"`、`nodeRole: "relay"`、`cloudBackend: "relay-cache"`。在每台 Electron 的 Settings 填入 Relay 地址與相同同步金鑰即可。
+`/health` 應顯示 `database: "sqlite"`、`nodeRole: "relay"`、`cloudBackend: "relay-cache"`。每台 Electron 在 Settings 勾選同步並使用相同 Relay 地址即可。
 
 FastAPI Cloud 會自動更換執行個體，因此它的本機 SQLite 只能視為可丟失快取。若未來要保證所有裝置即使長期錯開上線仍能同步，應將 Relay 指向一台常駐 Seed Node，或新增小型持久化物件儲存；不能只依賴 Cloud 執行個體的本機檔案。
 
-目前為組內 pre-auth 系統。Relay 同步端點必須設定 `MISSION_DASHBOARD_SYNC_KEY`；若要開放給非受信任使用者，還需要裝置身份、金鑰輪替、角色授權與稽核紀錄。
+目前 Relay 是無登入的 pre-auth 系統，只適合交換非敏感研究資料。若要開放給非受信任使用者或正式競賽，仍需要裝置身份、角色授權、資料簽章與稽核紀錄。
 
 ## 資料與機器學習邊界
 

@@ -28,13 +28,10 @@ def get_sync_setting(session: Session) -> SyncSetting:
 def update_sync_setting(
     session: Session,
     peer_url: str,
-    shared_key: str | None,
     enabled: bool,
 ) -> dict:
     setting = get_sync_setting(session)
     setting.peer_url = normalize_peer_url(peer_url)
-    if shared_key is not None:
-        setting.shared_key = shared_key.strip() or None
     setting.enabled = enabled
     setting.last_error = None
     session.commit()
@@ -45,7 +42,6 @@ def serialize_sync_setting(setting: SyncSetting) -> dict:
     return {
         "peerUrl": setting.peer_url,
         "enabled": setting.enabled,
-        "hasSharedKey": bool(setting.shared_key),
         "lastSyncAt": _iso(setting.last_sync_at),
         "lastError": setting.last_error,
     }
@@ -131,9 +127,8 @@ def synchronize_with_peer(session: Session) -> dict:
     setting = get_sync_setting(session)
     if not setting.enabled or not setting.peer_url:
         return {"status": "disabled", **serialize_sync_setting(setting)}
-    headers = {"X-Sync-Key": setting.shared_key} if setting.shared_key else {}
     try:
-        with httpx.Client(timeout=30.0, headers=headers) as client:
+        with httpx.Client(timeout=30.0) as client:
             peer_manifest = client.get(f"{setting.peer_url}/sync/manifest")
             peer_manifest.raise_for_status()
             peer_items = {
@@ -190,9 +185,18 @@ def synchronize_with_peer(session: Session) -> dict:
     except Exception as error:
         session.rollback()
         setting = get_sync_setting(session)
-        setting.last_error = str(error)
+        setting.last_error = _sync_error_message(error)
         session.commit()
         return {"status": "error", **serialize_sync_setting(setting)}
+
+
+def _sync_error_message(error: Exception) -> str:
+    if isinstance(error, httpx.HTTPStatusError):
+        status_code = error.response.status_code
+        return f"Relay request failed with HTTP {status_code}."
+    if isinstance(error, httpx.RequestError):
+        return "Relay is unreachable. Check the relay address and network connection."
+    return str(error)
 
 
 def _scenario_record(scenario: Scenario) -> dict:
@@ -203,7 +207,7 @@ def _scenario_record(scenario: Scenario) -> dict:
         "originalScript": scenario.original_script,
         "scenarioJson": scenario.scenario_json,
         "schemaVersion": scenario.schema_version,
-        "status": scenario.status,
+        "status": "active",
         "createdAt": _iso(scenario.created_at),
         "updatedAt": _iso(scenario.updated_at),
     }
@@ -289,7 +293,7 @@ def _import_scenario(session: Session, record: dict) -> None:
     scenario.original_script = payload.get("originalScript")
     scenario.scenario_json = payload["scenarioJson"]
     scenario.schema_version = payload["schemaVersion"]
-    scenario.status = payload["status"]
+    scenario.status = "active"
     scenario.created_at = _datetime(payload["createdAt"])
     scenario.updated_at = _datetime(payload["updatedAt"])
 

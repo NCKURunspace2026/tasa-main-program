@@ -160,6 +160,21 @@ export default function Submissions({ onNavigate }) {
   function handleManualSubmit(event) {
     event.preventDefault();
 
+    if (!scenariosLoaded || scenarioOptions.length === 0) {
+      setValidationState({
+        status: "failed",
+        currentStep: 1,
+        message: scenariosLoaded
+          ? "No Scenario is available. Publish one in Settings."
+          : "Scenario definitions are still loading.",
+        checkedAt: new Date(),
+        submissionId: null,
+        solutionId: null,
+        executionEvidence: null,
+      });
+      return;
+    }
+
     const hasMissingGeneralField =
       manualValues.team.trim() === "";
 
@@ -367,7 +382,13 @@ export default function Submissions({ onNavigate }) {
             id="submission-scenario"
             value={scenarioId}
             onChange={handleScenarioChange}
+            disabled={!scenariosLoaded || scenarioOptions.length === 0}
           >
+            {scenarioOptions.length === 0 ? (
+              <option value="">
+                {scenariosLoaded ? "No active Scenario" : "Loading Scenarios…"}
+              </option>
+            ) : null}
             {scenarioOptions.map((scenario) => (
               <option
                 key={scenario.id}
@@ -407,6 +428,7 @@ export default function Submissions({ onNavigate }) {
               onAddBurn={addBurn}
               onRemoveBurn={removeBurn}
               onSubmit={handleManualSubmit}
+              canSubmit={scenariosLoaded && scenarioOptions.length > 0}
             />
           </div>
         </section>
@@ -434,6 +456,7 @@ function ManualSubmission({
   onAddBurn,
   onRemoveBurn,
   onSubmit,
+  canSubmit,
 }) {
   return (
     <form
@@ -595,9 +618,10 @@ function ManualSubmission({
         <button
           className="submission-primary-button"
           type="submit"
+          disabled={!canSubmit}
         >
           <ValidationIcon />
-          Validate Manual Input
+          {canSubmit ? "Validate Manual Input" : "No Active Scenario"}
         </button>
       </div>
     </form>

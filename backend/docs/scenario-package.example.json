@@ -23,7 +23,16 @@
     },
     "forceModel": {
       "centralBody": "Earth",
-      "gravityField": { "enabled": true, "degree": 4, "order": 4 }
+      "gravity": {
+        "type": "spherical-harmonic",
+        "enabled": true,
+        "degree": 4,
+        "order": 4
+      },
+      "pointMasses": ["Sun", "Luna"],
+      "drag": { "enabled": false, "model": null },
+      "solarRadiationPressure": { "enabled": false },
+      "relativisticCorrection": { "enabled": false }
     },
     "propagator": {
       "integrator": "RungeKutta89",
