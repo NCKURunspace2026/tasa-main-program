@@ -259,6 +259,10 @@
 .scenario-admin-list article {
   padding: 13px 20px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .scenario-admin-list article > div {
@@ -269,6 +273,19 @@
 
 .scenario-admin-list strong { color: #78b7f2; }
 .scenario-admin-list span { color: var(--text-secondary); }
+
+.settings-data-note {
+  margin: 0;
+  padding: 0 20px 4px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.solution-admin-list > p {
+  margin: 0;
+  padding: 16px 20px;
+  color: var(--text-secondary);
+}
 
 .settings-message {
   margin: 0;

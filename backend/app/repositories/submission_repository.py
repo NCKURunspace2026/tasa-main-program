@@ -6,7 +6,7 @@ from secrets import token_hex
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ..models import Submission
+from ..models import Solution, Submission
 
 
 def create(session: Session, submission: Submission) -> Submission:
@@ -20,12 +20,14 @@ def find_by_id(session: Session, submission_id: str) -> Submission | None:
 
 
 def find_passed_by_scenario(session: Session, scenario_id: str):
-    from ..models import Solution
-
     return session.execute(
         select(Submission, Solution)
         .join(Solution, Solution.id == Submission.solution_id)
-        .where(Solution.scenario_id == scenario_id, Submission.status == "passed")
+        .where(
+            Solution.scenario_id == scenario_id,
+            Solution.deleted_at.is_(None),
+            Submission.status == "passed",
+        )
         .order_by(Submission.total_score.desc(), Submission.created_at.asc())
     ).all()
 
@@ -54,7 +56,9 @@ def claim_next_pending(
 
     query = (
         select(Submission)
+        .join(Solution, Solution.id == Submission.solution_id)
         .where(Submission.status == "pending")
+        .where(Solution.deleted_at.is_(None))
         .order_by(Submission.created_at.asc())
         .limit(1)
     )

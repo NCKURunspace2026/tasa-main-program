@@ -13,7 +13,8 @@
   background-color: #030b16;
   color: #f4f7fb;
 
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .main-content-header {

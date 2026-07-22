@@ -45,7 +45,7 @@ Request：
 
 ## Worker 契約
 
-Internal API 全部要求 `X-Worker-Token`，此 secret 只能存在 FastAPI Cloud 與指定 Worker 電腦：
+組內 Electron 裝置可在 Settings 勾選 Worker；目前 Internal API 不使用共享 token：
 
 - `POST /api/internal/validation/heartbeat`：包含穩定 `workerId`、provider 與 `gmatConfigured`。
 - `POST /api/internal/validation/next`：包含 `workerId`，回傳任務、`claimToken` 與 `leaseExpiresAt`。
@@ -57,7 +57,11 @@ Neon PostgreSQL 使用 row-level lock 與 `SKIP LOCKED` 避免多 Worker 同時�
 
 - `GET /api/scenarios` 與 `GET /api/scenarios/{id}`：公開讀取。
 - `POST /api/scenarios/parse`：只驗證，不寫入。
-- `POST /api/scenarios` 與 `PUT /api/scenarios/{id}`：要求 Worker secret，Renderer 不直接取得 secret，由 Electron main process 代理管理請求。
+- `POST /api/scenarios` 與 `PUT /api/scenarios/{id}`：由 Electron main process 代理管理請求。
+- `DELETE /api/scenarios/{id}`：將 status 改為 `inactive`；`POST /restore` 可恢復。
+- Solution 刪除寫入 `deleted_at`，排行榜與一般 detail 預設排除；資料匯出仍包含 archived 紀錄。
+
+這是組內 pre-auth 信任模型；對外開放前必須加上身分驗證、角色授權與稽核紀錄。
 
 Scenario 保存固定物理環境；Decision Variables 只能存在 Solution。
 

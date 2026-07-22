@@ -32,12 +32,11 @@ flowchart LR
 | Electron Client | React、手動輸入、本機 GMAT 預驗證、結果輪詢 | 預設連線至 FastAPI Cloud |
 | FastAPI Cloud | Scenario、Submission Queue、結果、計分、Leaderboard | <https://missiondashboard.fastapicloud.dev> |
 | Neon PostgreSQL | 所有正式持久化資料 | 需在 Cloud 設定 `DATABASE_URL` |
-| GMAT Worker | heartbeat、claim、GMAT、result | 需與 Cloud 共用 `MISSION_DASHBOARD_WORKER_TOKEN` |
+| GMAT Worker | heartbeat、claim、GMAT、result | 在 Settings 勾選 `Run official validation worker` |
 
-介面把這台指定電腦稱為 **Official Validator（官方驗證電腦）**。
-`GMAT Worker` 只保留為後端技術名稱，不是一般使用者可以切換的 Mode。
-Queue 技術上支援多台 Validator，但正式賽事應只授權具有相同 GMAT 版本與
-驗證環境的受控電腦。
+介面把啟用 Worker 的電腦稱為 **Official Validator（官方驗證電腦）**。
+組內任一台 Electron 裝置都能在 Settings 啟用 Worker；正式賽事仍應只在
+GMAT 版本與驗證環境一致的受控電腦啟用。
 
 `chowseegun.app` 目前不參與系統運作；日後若只想換成較好看的 API 網址，再另外綁定即可。
 
@@ -56,7 +55,6 @@ FastAPI Cloud：
 
 ```text
 DATABASE_URL=postgresql://...neon.tech/...?...sslmode=require
-MISSION_DASHBOARD_WORKER_TOKEN=<至少 32 bytes 的隨機 secret>
 ```
 
 `DATABASE_URL` 必須使用 Neon 的 pooled connection string。Electron Client 不得持有此值，也不能直接連 PostgreSQL。
@@ -81,17 +79,15 @@ npm run lint
 npm run build
 ```
 
-Electron 不再詢問 Server／Client Mode。一般啟動永遠是 Cloud Client；只有指定 GMAT 電腦在啟動時提供 secret，才會額外啟動 Worker 與 Scenario Administration：
+Electron 不再詢問 Server／Client Mode。要協助處理 Queue 時，在 Settings 設定 GMAT 路徑、勾選 `Run official validation worker` 後儲存：
 
 ```bash
 cd frontend
-MISSION_DASHBOARD_WORKER_TOKEN='<same-secret-as-cloud>' \
 MISSION_DASHBOARD_API_BASE_URL='https://missiondashboard.fastapicloud.dev/api' \
 npm run electron:dev
 ```
 
-本專案的指定 macOS Worker secret 會放在 Keychain service
-`org.nckurunspace.mission-dashboard.worker-token`，不寫入檔案或 Git。設定完成後可用：
+macOS 也可用下列 helper 啟動，再到 Settings 開啟 Worker：
 
 ```bash
 frontend/scripts/run_gmat_worker_macos.sh --dev
@@ -106,7 +102,6 @@ frontend/scripts/run_gmat_worker_macos.sh
 ```bash
 cd backend
 .venv/bin/fastapi cloud env set DATABASE_URL 'postgresql://...'
-.venv/bin/fastapi cloud env set MISSION_DASHBOARD_WORKER_TOKEN '<random-secret>'
 .venv/bin/fastapi deploy .
 ```
 
@@ -118,6 +113,10 @@ curl https://missiondashboard.fastapicloud.dev/api/scenarios
 ```
 
 `/health` 應顯示 `database: "neon"`。指定 Worker 啟動後，`validationWorker` 應由 `offline` 變成 `ready`，且 `physicalValidation` 為 `true`。
+
+目前是組內 pre-auth 部署：Worker 與管理端點沒有共享 token。若服務要開放給非受信任使用者，必須先補登入、角色授權與稽核紀錄，不能直接沿用此信任模型。
+
+Scenario 與 Solution 使用 soft delete；一般列表與排行榜預設隱藏 archived 資料，但資料仍保留。Settings 可查看／恢復 archived 資料，並可把包含 active 與 archived 紀錄的資料集匯出成 JSON Lines（JSONL）或 Comma-Separated Values（CSV）。
 
 2026-07-22 的正式端到端驗證已確認兩個方向：參考解經本機 GMAT
 propagation 後為 `passed`，錯誤案例 `ΔV=[1,0,0]`、`finalCoastTime=100`

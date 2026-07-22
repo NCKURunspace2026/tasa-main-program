@@ -4,7 +4,6 @@ const PROVIDER = "official-gmat-console";
 
 function createValidationWorker({
   apiBaseUrl,
-  workerToken,
   workerId,
   readConfig,
   pollIntervalMs = 2000,
@@ -17,7 +16,6 @@ function createValidationWorker({
       ...options,
       headers: {
         "Content-Type": "application/json",
-        "X-Worker-Token": workerToken,
         ...options.headers,
       },
     });

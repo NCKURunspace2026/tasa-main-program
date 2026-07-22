@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..schemas.scenario import ScenarioCreate, ScenarioParseRequest, ScenarioUpdate
-from ..security import require_worker_access
 from ..services.scenario_service import (
     ScenarioAlreadyExistsError,
     InvalidScenarioError,
@@ -11,6 +10,7 @@ from ..services.scenario_service import (
     get_scenario,
     list_scenarios,
     normalize_scenario,
+    set_scenario_status,
     update_scenario,
 )
 
@@ -18,8 +18,11 @@ router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
 
 @router.get("")
-def read_scenarios(session: Session = Depends(get_db)):
-    return {"items": list_scenarios(session)}
+def read_scenarios(
+    include_inactive: bool = Query(default=False, alias="includeInactive"),
+    session: Session = Depends(get_db),
+):
+    return {"items": list_scenarios(session, include_inactive)}
 
 
 @router.post("/parse")
@@ -42,7 +45,6 @@ def read_scenario(scenario_id: str, session: Session = Depends(get_db)):
 def post_scenario(
     payload: ScenarioCreate,
     session: Session = Depends(get_db),
-    _: None = Depends(require_worker_access),
 ):
     try:
         return create_scenario(session, payload)
@@ -57,12 +59,27 @@ def put_scenario(
     scenario_id: str,
     payload: ScenarioUpdate,
     session: Session = Depends(get_db),
-    _: None = Depends(require_worker_access),
 ):
     try:
         updated = update_scenario(session, scenario_id, payload)
     except InvalidScenarioError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Scenario not found.")
+    return updated
+
+
+@router.delete("/{scenario_id}")
+def delete_scenario(scenario_id: str, session: Session = Depends(get_db)):
+    updated = set_scenario_status(session, scenario_id, "inactive")
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Scenario not found.")
+    return updated
+
+
+@router.post("/{scenario_id}/restore")
+def restore_scenario(scenario_id: str, session: Session = Depends(get_db)):
+    updated = set_scenario_status(session, scenario_id, "active")
     if updated is None:
         raise HTTPException(status_code=404, detail="Scenario not found.")
     return updated

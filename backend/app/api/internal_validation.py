@@ -9,7 +9,6 @@ from ..schemas.validation import (
     WorkerClaimRequest,
     WorkerHeartbeat,
 )
-from ..security import require_worker_access
 from ..services.validation_queue_service import (
     SubmissionStateError,
     claim_next_submission,
@@ -24,7 +23,6 @@ router = APIRouter(prefix="/api/internal/validation", tags=["internal-validation
 def heartbeat(
     payload: WorkerHeartbeat,
     session: Session = Depends(get_db),
-    _: None = Depends(require_worker_access),
 ):
     return record_heartbeat(
         session,
@@ -38,7 +36,6 @@ def heartbeat(
 def claim_next(
     payload: WorkerClaimRequest,
     session: Session = Depends(get_db),
-    _: None = Depends(require_worker_access),
 ):
     item = claim_next_submission(session, payload.workerId)
     return {"item": item}
@@ -49,7 +46,6 @@ def post_result(
     submission_id: str,
     payload: CentralValidationResult,
     session: Session = Depends(get_db),
-    _: None = Depends(require_worker_access),
 ):
     try:
         return complete_submission(session, submission_id, payload)

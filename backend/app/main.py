@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.leaderboard import router as leaderboard_router
 from .api.internal_validation import router as internal_validation_router
+from .api.data_export import router as data_export_router
 from .api.scenarios import router as scenarios_router
 from .api.solutions import router as solutions_router
 from .api.submissions import router as submissions_router
@@ -46,6 +47,7 @@ app.include_router(scenarios_router)
 app.include_router(leaderboard_router)
 app.include_router(solutions_router)
 app.include_router(internal_validation_router)
+app.include_router(data_export_router)
 
 
 @app.get("/health")

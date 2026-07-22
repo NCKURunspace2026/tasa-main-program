@@ -20,11 +20,12 @@ def test_cloud_backend_is_the_authoritative_api():
     assert scenarios.json()["items"][0]["scenarioId"] == "SC-001"
 
 
-def test_internal_worker_api_requires_the_shared_secret():
+def test_internal_worker_api_accepts_a_team_worker_without_shared_secret():
     with TestClient(app) as client:
-        forbidden = client.post(
+        response = client.post(
             "/api/internal/validation/next",
             json={"workerId": "worker-test"},
         )
 
-    assert forbidden.status_code == 403
+    assert response.status_code == 200
+    assert response.json() == {"item": None}

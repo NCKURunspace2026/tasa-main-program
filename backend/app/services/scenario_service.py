@@ -31,8 +31,13 @@ def normalize_scenario(definition: dict) -> dict:
     return normalized
 
 
-def list_scenarios(session: Session) -> list[dict]:
-    return [_serialize(scenario) for scenario in scenario_repository.find_all_active(session)]
+def list_scenarios(session: Session, include_inactive: bool = False) -> list[dict]:
+    scenarios = (
+        scenario_repository.find_all(session)
+        if include_inactive
+        else scenario_repository.find_all_active(session)
+    )
+    return [_serialize(scenario) for scenario in scenarios]
 
 
 def get_scenario(session: Session, scenario_id: str) -> dict | None:
@@ -71,6 +76,20 @@ def update_scenario(
     scenario.description = payload.description.strip()
     scenario.scenario_json = definition
     scenario.schema_version = definition["schemaVersion"]
+    scenario_repository.update(session, scenario)
+    session.commit()
+    return _serialize(scenario)
+
+
+def set_scenario_status(
+    session: Session,
+    scenario_id: str,
+    status: str,
+) -> dict | None:
+    scenario = scenario_repository.find_by_id(session, scenario_id)
+    if scenario is None:
+        return None
+    scenario.status = status
     scenario_repository.update(session, scenario)
     session.commit()
     return _serialize(scenario)

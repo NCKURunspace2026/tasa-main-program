@@ -12,6 +12,10 @@ def find_all_active(session: Session) -> list[Scenario]:
     ).all())
 
 
+def find_all(session: Session) -> list[Scenario]:
+    return list(session.scalars(select(Scenario).order_by(Scenario.id)).all())
+
+
 def find_by_id(session: Session, scenario_id: str) -> Scenario | None:
     return session.get(Scenario, scenario_id)
 

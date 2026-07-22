@@ -13,9 +13,8 @@ const cloudApiBaseUrl = (
   process.env.MISSION_DASHBOARD_API_BASE_URL
   ?? "https://missiondashboard.fastapicloud.dev/api"
 ).replace(/\/$/, "");
-const workerToken = process.env.MISSION_DASHBOARD_WORKER_TOKEN?.trim() ?? "";
-const runtimeRole = workerToken ? "worker" : "client";
 let validationWorker = null;
+let configStore = null;
 
 function createWindow() {
   const iconPath = app.isPackaged
@@ -33,7 +32,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  const runtimeParams = new URLSearchParams({ runtimeRole });
+  const runtimeParams = new URLSearchParams({ runtimeRole: "client" });
   if (developmentRendererUrl) {
     window.loadURL(`${developmentRendererUrl}?${runtimeParams.toString()}`);
   } else {
@@ -51,31 +50,37 @@ app.whenReady().then(async () => {
     app.dock.setIcon(nativeImage.createFromPath(appIconPath));
   }
   ipcMain.handle("runtime:get-config", () => ({
-    role: runtimeRole,
+    role: configStore?.read().runOfficialValidationWorker ? "worker" : "client",
     cloudApiBaseUrl,
   }));
-  const configStore = createConfigStore(app);
-  if (runtimeRole === "worker") {
+  configStore = createConfigStore(app);
+
+  function syncValidationWorker() {
     const currentConfig = configStore.read();
+    if (!currentConfig.runOfficialValidationWorker) {
+      validationWorker?.stop();
+      validationWorker = null;
+      return;
+    }
+    if (validationWorker) return;
     const workerId = currentConfig.workerId ?? `GMAT-${crypto.randomUUID()}`;
     if (!currentConfig.workerId) configStore.write({ workerId });
     validationWorker = createValidationWorker({
       apiBaseUrl: cloudApiBaseUrl,
-      workerToken,
       workerId,
       readConfig: () => configStore.read(),
     });
     validationWorker.start();
   }
+  syncValidationWorker();
   ipcMain.handle("cloud:admin-request", async (_event, pathName, options = {}) => {
-    if (!workerToken || !/^\/scenarios(?:\/|$)/.test(pathName)) {
-      throw new Error("Scenario administration is not enabled on this computer.");
+    if (!/^\/(?:scenarios|solutions|data)(?:\/|$)/.test(pathName)) {
+      throw new Error("This administration request is not allowed.");
     }
     const response = await fetch(`${cloudApiBaseUrl}${pathName}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        "X-Worker-Token": workerToken,
         ...options.headers,
       },
     });
@@ -93,7 +98,9 @@ app.whenReady().then(async () => {
     const pathConfig = config.gmatInstallationPath
       ? resolveGmatInstallation(config.gmatInstallationPath)
       : config;
-    return configStore.write({ ...config, ...pathConfig });
+    const saved = configStore.write({ ...config, ...pathConfig });
+    syncValidationWorker();
+    return saved;
   });
   ipcMain.handle("gmat:validate-submission", async (_event, request) => {
     const config = configStore.read();

@@ -14,7 +14,7 @@
 
   gap: 20px;
 
-  overflow: auto;
+  overflow: visible;
 }
 
 /* ========================================
@@ -67,7 +67,9 @@
 }
 
 .leaderboard-table-scroll {
-  max-height: 420px;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .leaderboard-table-scroll table {

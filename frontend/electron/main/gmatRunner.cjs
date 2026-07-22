@@ -8,6 +8,9 @@ const { parseGmatReport } = require("./resultParser.cjs");
 
 function runGmat({ executablePath, scenario, finalDecisionVariables, timeoutMs = 120000, keepTemporaryFiles = false }) {
   if (!executablePath || !fs.existsSync(executablePath)) throw new Error("Choose a valid local GmatConsole executable first.");
+  // GMAT startup files resolve MEASUREMENT_PATH and VEHICLE_EPHEM_PATH against
+  // bin/../output. A clean installation may not include it yet.
+  ensureGmatOutputDirectory(executablePath);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mission-dashboard-gmat-"));
   const scriptPath = path.join(directory, "validation.script");
   const reportPath = path.join(directory, "validation-report.txt");
@@ -56,7 +59,13 @@ function runGmat({ executablePath, scenario, finalDecisionVariables, timeoutMs =
   });
 }
 
+function ensureGmatOutputDirectory(executablePath) {
+  const outputPath = path.resolve(path.dirname(executablePath), "..", "output");
+  fs.mkdirSync(outputPath, { recursive: true });
+  return outputPath;
+}
+
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
-module.exports = { runGmat };
+module.exports = { ensureGmatOutputDirectory, runGmat };

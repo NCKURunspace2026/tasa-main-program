@@ -98,8 +98,8 @@ export function getSolutionDetail(solutionId) {
   return request(`/solutions/${solutionId}`);
 }
 
-export function getScenarios() {
-  return request("/scenarios");
+export function getScenarios({ includeInactive = false } = {}) {
+  return request(`/scenarios${includeInactive ? "?includeInactive=true" : ""}`);
 }
 
 export function createScenario(scenario) {
@@ -114,6 +114,46 @@ export function updateScenario(scenarioId, scenario) {
     method: "PUT",
     body: JSON.stringify(scenario),
   });
+}
+
+export function deleteScenario(scenarioId) {
+  return adminRequest(`/scenarios/${scenarioId}`, { method: "DELETE" });
+}
+
+export function restoreScenario(scenarioId) {
+  return adminRequest(`/scenarios/${scenarioId}/restore`, { method: "POST" });
+}
+
+export function getSolutions({ scenarioId, includeDeleted = false } = {}) {
+  const parameters = new URLSearchParams();
+  if (scenarioId) parameters.set("scenarioId", scenarioId);
+  if (includeDeleted) parameters.set("includeDeleted", "true");
+  const query = parameters.toString();
+  return request(`/solutions${query ? `?${query}` : ""}`);
+}
+
+export function deleteSolution(solutionId) {
+  return adminRequest(`/solutions/${solutionId}`, { method: "DELETE" });
+}
+
+export function restoreSolution(solutionId) {
+  return adminRequest(`/solutions/${solutionId}/restore`, { method: "POST" });
+}
+
+export async function downloadDataExport(format) {
+  const response = await fetch(`${getStoredApiBaseUrl()}/data/export?format=${format}`);
+  if (!response.ok) throw new Error(`Data export failed (${response.status}).`);
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="?([^";]+)"?/)?.[1]
+    ?? `mission-dashboard-dataset.${format}`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return filename;
 }
 
 function adminRequest(path, options) {

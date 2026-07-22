@@ -42,9 +42,10 @@ def get_db():
 def initialize_database() -> None:
     Base.metadata.create_all(engine)
     _add_queue_lease_columns_for_existing_database()
+    _add_soft_delete_columns_for_existing_database()
     with SessionLocal.begin() as session:
         definition_path = BACKEND_ROOT / "docs" / "scenarios" / "small-challenge-v1.json"
-        definition = json.loads(definition_path.read_text())
+        definition = json.loads(definition_path.read_text(encoding="utf-8"))
         scenario = session.get(Scenario, "SC-001")
         if scenario is None:
             session.add(Scenario(
@@ -100,6 +101,14 @@ def _add_queue_lease_columns_for_existing_database() -> None:
                 connection.execute(text(
                     f"ALTER TABLE submissions ADD COLUMN {name} {data_type}"
                 ))
+
+
+def _add_soft_delete_columns_for_existing_database() -> None:
+    """Keep existing local and cloud databases compatible with soft deletion."""
+    existing = {column["name"] for column in inspect(engine).get_columns("solutions")}
+    if "deleted_at" not in existing:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE solutions ADD COLUMN deleted_at TIMESTAMP"))
 
 
 def reset_database(session: Session) -> None:

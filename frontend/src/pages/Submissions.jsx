@@ -45,6 +45,7 @@ function createEmptyBurn() {
 
 const initialManualValues = {
   team: "",
+  initialCoastTime: "",
   finalCoastTime: "",
   notes: "",
 };
@@ -168,6 +169,10 @@ export default function Submissions({ onNavigate }) {
       ) ||
       Number(manualValues.finalCoastTime) < 0;
 
+    const hasInvalidInitialCoastTime =
+      !isValidNumber(manualValues.initialCoastTime) ||
+      Number(manualValues.initialCoastTime) < 0;
+
     const hasInvalidBurn = burns.some(
       (burn, index) =>
         !isValidNumber(burn.deltaVX) ||
@@ -180,6 +185,7 @@ export default function Submissions({ onNavigate }) {
 
     if (
       hasMissingGeneralField ||
+      hasInvalidInitialCoastTime ||
       hasInvalidFinalCoastTime ||
       hasInvalidBurn
     ) {
@@ -195,7 +201,7 @@ export default function Submissions({ onNavigate }) {
     }
 
     const finalDecisionVariables = {
-      tWait: 0,
+      tWait: Number(manualValues.initialCoastTime),
       burns: burns.map((burn, index) => ({
         deltaV: [
           Number(burn.deltaVX),
@@ -442,6 +448,16 @@ function ManualSubmission({
           placeholder="Apex Trajectory"
           required
           onChange={onChange}
+        />
+
+        <NumericField
+          label="Initial coast time"
+          value={values.initialCoastTime}
+          placeholder="0.00"
+          suffix="s"
+          onChange={(value) => onChange({
+            target: { name: "initialCoastTime", value },
+          })}
         />
 
       </div>

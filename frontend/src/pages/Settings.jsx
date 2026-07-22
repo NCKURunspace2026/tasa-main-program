@@ -5,8 +5,14 @@ import "./Settings.css";
 import PageHeader from "../components/PageHeader.jsx";
 import {
   createScenario,
+  deleteScenario,
+  deleteSolution,
+  downloadDataExport,
   getCloudAddress,
   getScenarios,
+  getSolutions,
+  restoreScenario,
+  restoreSolution,
   setCloudAddress,
   testCloudConnection,
   updateScenario as updateScenarioRequest,
@@ -23,6 +29,7 @@ const defaultSettings = {
   gmatExecutablePath: "",
   validationTimeout: "120",
   keepTemporaryFiles: false,
+  runOfficialValidationWorker: false,
 };
 
 const emptyScenarioLimits = {
@@ -36,6 +43,15 @@ const emptyScenarioLimits = {
   minimumBurnCount: "",
   maximumBurnCount: "",
   minimumBurnSeparationSec: "",
+  distanceReferenceKm: "",
+  distanceDecayKm: "",
+  timeReferenceSec: "",
+  timeSlope: "",
+  deltaVReferenceKmPerSec: "",
+  deltaVSlope: "",
+  distanceWeight: "",
+  timeWeight: "",
+  deltaVWeight: "",
 };
 
 const emptyScenario = {
@@ -56,7 +72,8 @@ function loadSettings() {
 
 export default function Settings({ runtimeConfig }) {
   const isWorker = runtimeConfig?.role === "worker";
-  const visibleSections = sections.filter(([id]) => id !== "administration" || isWorker);
+  const canAdmin = Boolean(window.missionDashboardDesktop?.adminCloudRequest);
+  const visibleSections = sections.filter(([id]) => id !== "administration" || canAdmin);
   const [activeSection, setActiveSection] = useState("connection");
   const [settings, setSettings] = useState(loadSettings);
   const [message, setMessage] = useState("");
@@ -66,20 +83,23 @@ export default function Settings({ runtimeConfig }) {
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
   const [isSavingScenario, setIsSavingScenario] = useState(false);
+  const [solutions, setSolutions] = useState([]);
 
   useEffect(() => {
     let isCurrent = true;
     window.missionDashboardDesktop?.getGmatConfig?.()
       .then((config) => {
-        if (isCurrent && config.gmatInstallationPath) {
+        if (isCurrent) {
           setSettings((current) => ({
             ...current,
-            gmatExecutablePath: config.gmatInstallationPath,
+            ...config,
+            gmatExecutablePath: config.gmatInstallationPath ?? "",
+            validationTimeout: String(Number(config.timeoutMs ?? 120000) / 1000),
           }));
         }
       })
       .catch(() => {});
-    getScenarios()
+    getScenarios({ includeInactive: canAdmin })
       .then((result) => {
         if (isCurrent) {
           setScenarios(result.items);
@@ -93,7 +113,17 @@ export default function Settings({ runtimeConfig }) {
         if (isCurrent) setMessage(error.message);
       });
     return () => { isCurrent = false; };
-  }, []);
+  }, [canAdmin]);
+
+  useEffect(() => {
+    if (!canAdmin || !selectedScenarioId) {
+      setSolutions([]);
+      return;
+    }
+    getSolutions({ scenarioId: selectedScenarioId, includeDeleted: true })
+      .then((result) => setSolutions(result.items))
+      .catch((error) => setMessage(error.message));
+  }, [canAdmin, selectedScenarioId]);
 
   function updateSetting(event) {
     const { name, value, type, checked } = event.target;
@@ -111,6 +141,7 @@ export default function Settings({ runtimeConfig }) {
         gmatInstallationPath: settings.gmatExecutablePath.trim(),
         timeoutMs: Number(settings.validationTimeout) * 1000,
         keepTemporaryFiles: settings.keepTemporaryFiles,
+        runOfficialValidationWorker: settings.runOfficialValidationWorker,
       });
       setMessage("Settings saved on this device.");
     } catch (error) {
@@ -229,6 +260,18 @@ export default function Settings({ runtimeConfig }) {
         maximumBurnCount: positiveInteger(scenarioLimits.maximumBurnCount, "Maximum burn count"),
         minimumBurnSeparationSec: nonNegativeNumber(scenarioLimits.minimumBurnSeparationSec, "Minimum burn separation"),
       };
+      scenarioJson.scoreConfig = {
+        ...scenarioJson.scoreConfig,
+        distanceReferenceKm: nonNegativeNumber(scenarioLimits.distanceReferenceKm, "Distance reference"),
+        distanceDecayKm: positiveNumber(scenarioLimits.distanceDecayKm, "Distance decay"),
+        timeReferenceSec: nonNegativeNumber(scenarioLimits.timeReferenceSec, "Time reference"),
+        timeSlope: positiveNumber(scenarioLimits.timeSlope, "Time slope"),
+        deltaVReferenceKmPerSec: nonNegativeNumber(scenarioLimits.deltaVReferenceKmPerSec, "Delta-V reference"),
+        deltaVSlope: positiveNumber(scenarioLimits.deltaVSlope, "Delta-V slope"),
+        distanceWeight: nonNegativeNumber(scenarioLimits.distanceWeight, "Distance weight"),
+        timeWeight: nonNegativeNumber(scenarioLimits.timeWeight, "Time weight"),
+        deltaVWeight: nonNegativeNumber(scenarioLimits.deltaVWeight, "Delta-V weight"),
+      };
       if (scenarioJson.propagator.minStepSec > scenarioJson.propagator.maxStepSec) {
         throw new Error("Minimum step cannot be greater than maximum step.");
       }
@@ -249,6 +292,45 @@ export default function Settings({ runtimeConfig }) {
       setMessage(error.message);
     } finally {
       setIsSavingScenario(false);
+    }
+  }
+
+  async function changeScenarioStatus(scenario) {
+    try {
+      const updated = scenario.status === "active"
+        ? await deleteScenario(scenario.scenarioId)
+        : await restoreScenario(scenario.scenarioId);
+      setScenarios((current) => current.map((item) => (
+        item.scenarioId === updated.scenarioId ? updated : item
+      )));
+      setMessage(`${updated.scenarioId} is now ${updated.status}. No database rows were deleted.`);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function changeSolutionStatus(solution) {
+    try {
+      const updated = solution.deletedAt
+        ? await restoreSolution(solution.solutionId)
+        : await deleteSolution(solution.solutionId);
+      setSolutions((current) => current.map((item) => (
+        item.solutionId === updated.solutionId
+          ? { ...item, deletedAt: updated.deletedAt }
+          : item
+      )));
+      setMessage(`${updated.solutionId} ${updated.deletedAt ? "archived" : "restored"}. The ML record remains stored.`);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function exportDataset(format) {
+    try {
+      const filename = await downloadDataExport(format);
+      setMessage(`${filename} downloaded with active and archived records.`);
+    } catch (error) {
+      setMessage(error.message);
     }
   }
 
@@ -337,6 +419,12 @@ export default function Settings({ runtimeConfig }) {
                   onChange={updateSetting}
                 />
               </SettingsRow>
+              <SettingsRow
+                label="Run official validation worker"
+                description="When enabled, this device claims queued submissions and validates them with its configured GMAT installation."
+              >
+                <input name="runOfficialValidationWorker" type="checkbox" checked={settings.runOfficialValidationWorker} onChange={updateSetting} />
+              </SettingsRow>
               <button className="settings-primary-button" type="button" onClick={saveSettings}>Save Local GMAT</button>
             </SettingsSection>
           ) : null}
@@ -363,11 +451,21 @@ export default function Settings({ runtimeConfig }) {
                 <ScenarioNumberField label="Integrator accuracy" description="Numerical integration error tolerance." name="accuracy" value={scenarioLimits.accuracy} onChange={updateScenarioLimit} />
                 <div className="scenario-limit-heading">Validation limits</div>
                 <ScenarioNumberField label="Required final distance" description="Maximum accepted interception distance in km." name="requiredFinalDistanceKm" value={scenarioLimits.requiredFinalDistanceKm} onChange={updateScenarioLimit} />
-                <ScenarioNumberField label="Maximum total Delta-V" description="Maximum total maneuver magnitude in km/s." name="maximumTotalDeltaV" value={scenarioLimits.maximumTotalDeltaV} onChange={updateScenarioLimit} />
-                <ScenarioNumberField label="Maximum mission time" description="Maximum propagated mission duration in seconds." name="maximumMissionTimeSec" value={scenarioLimits.maximumMissionTimeSec} onChange={updateScenarioLimit} />
+                <ScenarioNumberField label="Maximum total Delta-V (ΔVlim)" description="Maximum total maneuver magnitude in km/s." name="maximumTotalDeltaV" value={scenarioLimits.maximumTotalDeltaV} onChange={updateScenarioLimit} />
+                <ScenarioNumberField label="Maximum mission time (Tmax)" description="Maximum propagated mission duration in seconds." name="maximumMissionTimeSec" value={scenarioLimits.maximumMissionTimeSec} onChange={updateScenarioLimit} />
                 <ScenarioNumberField label="Minimum burn count" name="minimumBurnCount" value={scenarioLimits.minimumBurnCount} onChange={updateScenarioLimit} integer />
                 <ScenarioNumberField label="Maximum burn count" name="maximumBurnCount" value={scenarioLimits.maximumBurnCount} onChange={updateScenarioLimit} integer />
-                <ScenarioNumberField label="Minimum burn separation" description="Minimum time between burns in seconds." name="minimumBurnSeparationSec" value={scenarioLimits.minimumBurnSeparationSec} onChange={updateScenarioLimit} />
+                <ScenarioNumberField label="Minimum burn separation (Δtmin)" description="Minimum time between burns in seconds." name="minimumBurnSeparationSec" value={scenarioLimits.minimumBurnSeparationSec} onChange={updateScenarioLimit} />
+                <div className="scenario-limit-heading">Score function</div>
+                <ScenarioNumberField label="Distance reference (Dref)" description="Distance with no exponential decay, in km." name="distanceReferenceKm" value={scenarioLimits.distanceReferenceKm} onChange={updateScenarioLimit} allowZero />
+                <ScenarioNumberField label="Distance decay (kd)" description="Distance exponential decay scale, in km." name="distanceDecayKm" value={scenarioLimits.distanceDecayKm} onChange={updateScenarioLimit} />
+                <ScenarioNumberField label="Time reference (Tref)" description="Center of the time sigmoid, in seconds." name="timeReferenceSec" value={scenarioLimits.timeReferenceSec} onChange={updateScenarioLimit} allowZero />
+                <ScenarioNumberField label="Time slope (kt)" description="Slope of the mission-time sigmoid." name="timeSlope" value={scenarioLimits.timeSlope} onChange={updateScenarioLimit} />
+                <ScenarioNumberField label="Delta-V reference (Delta Vlim)" description="Center of the Delta-V sigmoid, in km/s." name="deltaVReferenceKmPerSec" value={scenarioLimits.deltaVReferenceKmPerSec} onChange={updateScenarioLimit} allowZero />
+                <ScenarioNumberField label="Delta-V slope (kv)" description="Slope of the Delta-V sigmoid." name="deltaVSlope" value={scenarioLimits.deltaVSlope} onChange={updateScenarioLimit} />
+                <ScenarioNumberField label="Distance coefficient (Cd)" name="distanceWeight" value={scenarioLimits.distanceWeight} onChange={updateScenarioLimit} allowZero />
+                <ScenarioNumberField label="Time coefficient (Ct)" name="timeWeight" value={scenarioLimits.timeWeight} onChange={updateScenarioLimit} allowZero />
+                <ScenarioNumberField label="Delta-V coefficient (Cv)" name="deltaVWeight" value={scenarioLimits.deltaVWeight} onChange={updateScenarioLimit} allowZero />
                 <button className="settings-primary-button" type="submit" disabled={isSavingScenario || !selectedScenarioId}>
                   {isSavingScenario ? "Saving…" : "Save Scenario Limits"}
                 </button>
@@ -404,7 +502,27 @@ export default function Settings({ runtimeConfig }) {
               <div className="scenario-admin-list">
                 {scenarios.map((scenario) => (
                   <article key={scenario.scenarioId}>
-                    <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
+                    <div><strong>{scenario.scenarioId}</strong><span>{scenario.name} · {scenario.status}</span></div>
+                    <button className="settings-secondary-button" type="button" onClick={() => changeScenarioStatus(scenario)}>
+                      {scenario.status === "active" ? "Archive" : "Restore"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+              <div className="scenario-admin-divider"><span>Solutions and ML dataset</span></div>
+              <p className="settings-data-note">Archive hides a Solution from the leaderboard without deleting its submissions or validation data.</p>
+              <div className="settings-inline-actions scenario-form-actions">
+                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("jsonl")}>Export JSONL</button>
+                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("csv")}>Export CSV</button>
+              </div>
+              <div className="scenario-admin-list solution-admin-list">
+                {solutions.length === 0 ? <p>No Solutions for this Scenario.</p> : null}
+                {solutions.map((solution) => (
+                  <article key={solution.solutionId}>
+                    <div><strong>{solution.solutionId}</strong><span>{solution.name} · {solution.deletedAt ? "archived" : solution.status}</span></div>
+                    <button className="settings-secondary-button" type="button" onClick={() => changeSolutionStatus(solution)}>
+                      {solution.deletedAt ? "Restore" : "Archive"}
+                    </button>
                   </article>
                 ))}
               </div>
@@ -418,7 +536,7 @@ export default function Settings({ runtimeConfig }) {
   );
 }
 
-function ScenarioNumberField({ label, description, name, value, onChange, integer = false }) {
+function ScenarioNumberField({ label, description, name, value, onChange, integer = false, allowZero = false }) {
   return (
     <SettingsRow label={label} description={description}>
       <input
@@ -426,7 +544,7 @@ function ScenarioNumberField({ label, description, name, value, onChange, intege
         name={name}
         value={value}
         step={integer ? "1" : "any"}
-        min={name === "requiredFinalDistanceKm" || name === "minimumBurnSeparationSec" ? "0" : "0.000000000001"}
+        min={allowZero || name === "requiredFinalDistanceKm" || name === "minimumBurnSeparationSec" ? "0" : "0.000000000001"}
         onChange={onChange}
         required
       />
@@ -437,9 +555,10 @@ function ScenarioNumberField({ label, description, name, value, onChange, intege
 function readScenarioLimits(definition) {
   const propagator = definition.propagator ?? {};
   const validation = definition.validation ?? {};
+  const scoreConfig = definition.scoreConfig ?? {};
   return Object.fromEntries(Object.keys(emptyScenarioLimits).map((key) => [
     key,
-    String(propagator[key] ?? validation[key] ?? ""),
+    String(propagator[key] ?? validation[key] ?? scoreConfig[key] ?? ""),
   ]));
 }
 

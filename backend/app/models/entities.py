@@ -39,6 +39,9 @@ class Solution(Base):
     name: Mapped[str] = mapped_column(String(180))
     decision_variables_json: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), default=None, index=True
+    )
 
 
 class Submission(Base):

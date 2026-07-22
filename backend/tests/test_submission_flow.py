@@ -3,9 +3,7 @@ from fastapi.testclient import TestClient
 from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
 
-WORKER_HEADERS = {
-    "X-Worker-Token": "test-worker-token",
-}
+WORKER_HEADERS = {}
 WORKER_ID = "test-central-gmat-worker"
 
 
@@ -108,16 +106,12 @@ def test_server_can_validate_and_publish_scenario_json():
         "scenarioJson": scenario_json(),
     }
     with TestClient(app) as client:
-        forbidden = client.post("/api/scenarios", json=payload)
-        assert forbidden.status_code == 403
-
         parsed = client.post("/api/scenarios/parse", json={"scenarioJson": scenario_json()})
         assert parsed.status_code == 200
         assert parsed.json()["scenarioJson"]["schemaVersion"] == 1
 
         created = client.post(
             "/api/scenarios",
-            headers=WORKER_HEADERS,
             json=payload,
         )
         assert created.status_code == 201
@@ -137,12 +131,8 @@ def test_only_server_can_update_published_scenario_limits():
             "scenarioJson": definition,
         }
 
-        forbidden = client.put("/api/scenarios/SC-001", json=payload)
-        assert forbidden.status_code == 403
-
         updated = client.put(
             "/api/scenarios/SC-001",
-            headers=WORKER_HEADERS,
             json=payload,
         )
         assert updated.status_code == 200
@@ -151,7 +141,6 @@ def test_only_server_can_update_published_scenario_limits():
         definition["propagator"]["maxStepSec"] = original_max_step
         restored = client.put(
             "/api/scenarios/SC-001",
-            headers=WORKER_HEADERS,
             json=payload,
         )
         assert restored.status_code == 200
@@ -182,9 +171,6 @@ def test_central_worker_claims_scores_and_publishes_passed_submission():
         payload["scenarioId"] = "SC-003"
         accepted = client.post("/api/submissions", json=payload).json()
 
-        forbidden = client.post("/api/internal/validation/next")
-        assert forbidden.status_code == 403
-
         claimed = client.post(
             "/api/internal/validation/next",
             headers=WORKER_HEADERS,
@@ -214,6 +200,52 @@ def test_central_worker_claims_scores_and_publishes_passed_submission():
         leaderboard = client.get("/api/scenarios/SC-003/leaderboard").json()
         assert leaderboard["total"] == 1
         assert leaderboard["items"][0]["solutionId"] == accepted["solutionId"]
+
+
+def test_soft_delete_hides_records_but_keeps_archives_and_exports():
+    with TestClient(app) as client:
+        accepted = client.post("/api/submissions", json=submission_payload()).json()
+        claimed = client.post(
+            "/api/internal/validation/next",
+            json={"workerId": WORKER_ID},
+        ).json()["item"]
+        assert client.post(
+            f"/api/internal/validation/{accepted['submissionId']}/result",
+            json={
+                "status": "passed",
+                "workerId": WORKER_ID,
+                "claimToken": claimed["claimToken"],
+                "provider": "official-gmat-console",
+                "minimumDistanceKm": 4.8,
+                "missionTimeSec": 5000,
+                "totalDeltaVKmPerSec": 0.374,
+                "penaltyScore": 0,
+            },
+        ).status_code == 200
+
+        solution_id = accepted["solutionId"]
+        assert client.delete(f"/api/solutions/{solution_id}").status_code == 200
+        assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 0
+        assert client.get(f"/api/solutions/{solution_id}").status_code == 404
+
+        archived = client.get(
+            "/api/solutions?scenarioId=SC-001&includeDeleted=true"
+        ).json()["items"]
+        assert archived[0]["solutionId"] == solution_id
+        assert archived[0]["deletedAt"] is not None
+
+        jsonl_export = client.get("/api/data/export?format=jsonl")
+        csv_export = client.get("/api/data/export?format=csv")
+        assert solution_id in jsonl_export.text
+        assert solution_id in csv_export.text
+        assert client.post(f"/api/solutions/{solution_id}/restore").status_code == 200
+        assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 1
+
+        assert client.delete("/api/scenarios/SC-001").status_code == 200
+        assert client.get("/api/scenarios").json()["items"] == []
+        inactive = client.get("/api/scenarios?includeInactive=true").json()["items"]
+        assert inactive[0]["status"] == "inactive"
+        assert client.post("/api/scenarios/SC-001/restore").status_code == 200
 
 
 def test_worker_heartbeat_controls_health_truthfully():
