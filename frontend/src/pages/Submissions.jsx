@@ -284,8 +284,13 @@ export default function Submissions({ onNavigate }) {
       failedStep = 4;
       const localValidationSeconds = (performance.now() - localValidationStartedAt) / 1000;
       const executionEvidence = localResult.artifacts?.execution ?? null;
+      const scoredDecisionVariables = localResult.adjustedDecisionVariables ?? submission.solution.decisionVariables;
       const result = await createSubmission({
         ...submission,
+        solution: {
+          ...submission.solution,
+          decisionVariables: scoredDecisionVariables,
+        },
         clientValidation: {
           passed: true,
           provider: localResult.provider,
@@ -313,6 +318,7 @@ export default function Submissions({ onNavigate }) {
           finalDistanceKm: localResult.finalDistance,
           totalTimeSec: localResult.totalTime,
           totalDeltaVKmPerSec: localResult.totalDeltaV,
+          adjustment: localResult.adjustment,
         },
       });
       runDataSync().catch(() => {});
@@ -922,6 +928,17 @@ function ValidationPanel({
             <span>Time at minimum distance</span>
             <strong>
               {formatOptionalSeconds(validationState.validationMetrics.minimumDistanceTimeSec)}
+            </strong>
+          </div>
+        ) : null}
+
+        {validationState.validationMetrics?.adjustment ? (
+          <div>
+            <span>Auto-adjusted final coast</span>
+            <strong>
+              {validationState.validationMetrics.adjustment.originalFinalCoastTime.toFixed(6)} s
+              {" -> "}
+              {validationState.validationMetrics.adjustment.adjustedFinalCoastTime.toFixed(6)} s
             </strong>
           </div>
         ) : null}
