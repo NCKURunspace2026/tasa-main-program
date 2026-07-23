@@ -21,7 +21,8 @@ const sections = [
   ["security", "Security"],
   ["updates", "App Updates"],
   ["validation", "Local GMAT"],
-  ["administration", "Scenario Administration"],
+  ["scenario-view", "Scenario Viewer"],
+  ["scenario-publish", "Publish Scenario"],
 ];
 
 const defaultSettings = {
@@ -147,7 +148,7 @@ function newScenarioForm() {
 
 export default function Settings() {
   const canAdmin = Boolean(window.missionDashboardDesktop?.localAdminRequest);
-  const visibleSections = sections.filter(([id]) => id !== "administration" || canAdmin);
+  const visibleSections = sections.filter(([id]) => !id.startsWith("scenario-") || canAdmin);
   const [activeSection, setActiveSection] = useState("connection");
   const [settings, setSettings] = useState(defaultSettings);
   const [message, setMessage] = useState("");
@@ -477,7 +478,7 @@ export default function Settings() {
         scenarioJson: JSON.stringify(data.scenarioJson ?? data.definition ?? {}, null, 2),
       });
       setMessage(`${file.name} loaded. Review it before publishing.`);
-      setActiveSection("administration");
+      setActiveSection("scenario-publish");
     } catch {
       setMessage("Scenario package must be valid JSON.");
     }
@@ -835,10 +836,10 @@ export default function Settings() {
             </SettingsSection>
           ) : null}
 
-          {activeSection === "administration" ? (
+          {activeSection === "scenario-view" ? (
             <SettingsSection
-              title="Scenario Administration"
-              description="Upload a package, review its fixed simulation environment, then publish it to clients."
+              title="Scenario Viewer"
+              description="Review the real Scenario state vectors, validation limits, and generated GMAT script before teams submit Solutions."
             >
               <form className="scenario-limits-form" onSubmit={saveScenarioLimits}>
                 <SettingsRow label="Edit published Scenario">
@@ -942,7 +943,67 @@ export default function Settings() {
                   <pre>{scriptPreview}</pre>
                 </div>
               ) : null}
-              <div className="scenario-admin-divider"><span>Publish another Scenario</span></div>
+              <div className="scenario-admin-list">
+                {scenarios.map((scenario) => (
+                  <article key={scenario.scenarioId}>
+                    <div className="scenario-admin-list-row">
+                      <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
+                      <button className="solution-remove-button" type="button" onClick={() => removeScenario(scenario)}>
+                        Remove
+                      </button>
+                    </div>
+                    {scenarioRemoval?.scenarioId === scenario.scenarioId ? (
+                      <form className="scenario-remove-inline" onSubmit={confirmRemoveScenario}>
+                        <p>Enter the device administration password. The Scenario is removed from active lists, but archived for export and synchronization.</p>
+                        <input
+                          type="password"
+                          autoComplete="current-password"
+                          value={scenarioRemovalPassword}
+                          onChange={(event) => setScenarioRemovalPassword(event.target.value)}
+                          placeholder="Administration password"
+                          required
+                        />
+                        <div>
+                          <button
+                            className="settings-secondary-button"
+                            type="button"
+                            onClick={() => { setScenarioRemoval(null); setScenarioRemovalPassword(""); }}
+                            disabled={isRemovingScenario}
+                          >
+                            Cancel
+                          </button>
+                          <button className="solution-remove-button" type="submit" disabled={isRemovingScenario}>
+                            {isRemovingScenario ? "Removing…" : "Confirm Remove"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+              <div className="scenario-admin-divider"><span>Data export</span></div>
+              <SettingsRow
+                label="Include archived records"
+                description="Off by default. Enable only for audit or recovery; archived Solutions may be unsuitable for ML training."
+              >
+                <input
+                  type="checkbox"
+                  checked={includeArchivedExport}
+                  onChange={(event) => setIncludeArchivedExport(event.target.checked)}
+                />
+              </SettingsRow>
+              <div className="settings-inline-actions scenario-form-actions">
+                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("jsonl")}>Export JSONL</button>
+                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("csv")}>Export CSV</button>
+              </div>
+            </SettingsSection>
+          ) : null}
+
+          {activeSection === "scenario-publish" ? (
+            <SettingsSection
+              title="Publish Scenario"
+              description="Upload or create a Scenario package. This page is separate from Scenario Viewer so published Scenarios are not confused with draft JSON."
+            >
               <div className="scenario-schema-guide">
                 <strong>Scenario JSON map</strong>
                 <div>
@@ -1007,59 +1068,6 @@ export default function Settings() {
                   {isPublishing ? "Publishing…" : "Publish Scenario"}
                 </button>
               </form>
-              <div className="scenario-admin-list">
-                {scenarios.map((scenario) => (
-                  <article key={scenario.scenarioId}>
-                    <div className="scenario-admin-list-row">
-                      <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
-                      <button className="solution-remove-button" type="button" onClick={() => removeScenario(scenario)}>
-                        Remove
-                      </button>
-                    </div>
-                    {scenarioRemoval?.scenarioId === scenario.scenarioId ? (
-                      <form className="scenario-remove-inline" onSubmit={confirmRemoveScenario}>
-                        <p>Enter the device administration password. The Scenario is removed from active lists, but archived for export and synchronization.</p>
-                        <input
-                          type="password"
-                          autoComplete="current-password"
-                          value={scenarioRemovalPassword}
-                          onChange={(event) => setScenarioRemovalPassword(event.target.value)}
-                          placeholder="Administration password"
-                          required
-                        />
-                        <div>
-                          <button
-                            className="settings-secondary-button"
-                            type="button"
-                            onClick={() => { setScenarioRemoval(null); setScenarioRemovalPassword(""); }}
-                            disabled={isRemovingScenario}
-                          >
-                            Cancel
-                          </button>
-                          <button className="solution-remove-button" type="submit" disabled={isRemovingScenario}>
-                            {isRemovingScenario ? "Removing…" : "Confirm Remove"}
-                          </button>
-                        </div>
-                      </form>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-              <div className="scenario-admin-divider"><span>Data export</span></div>
-              <SettingsRow
-                label="Include archived records"
-                description="Off by default. Enable only for audit or recovery; archived Solutions may be unsuitable for ML training."
-              >
-                <input
-                  type="checkbox"
-                  checked={includeArchivedExport}
-                  onChange={(event) => setIncludeArchivedExport(event.target.checked)}
-                />
-              </SettingsRow>
-              <div className="settings-inline-actions scenario-form-actions">
-                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("jsonl")}>Export JSONL</button>
-                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("csv")}>Export CSV</button>
-              </div>
             </SettingsSection>
           ) : null}
 
