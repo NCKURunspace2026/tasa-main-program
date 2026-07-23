@@ -1073,8 +1073,8 @@ export default function Settings() {
 function ScenarioOverview({ scenario }) {
   if (!scenario?.scenarioJson) return null;
   const definition = scenario.scenarioJson;
-  const target = definition.spacecraft?.target ?? {};
-  const chaser = definition.spacecraft?.chaser ?? {};
+  const target = readScenarioState(definition, "target");
+  const chaser = readScenarioState(definition, "chaser");
   const validation = definition.validation ?? {};
   const initialDistance = vectorDistance(target.positionKm, chaser.positionKm);
   return (
@@ -1114,6 +1114,15 @@ function ScenarioOverviewItem({ label, value, wide = false }) {
 function formatVector(values, unit) {
   if (!Array.isArray(values) || values.length !== 3) return "Unknown";
   return `[${values.map((value) => Number(value).toFixed(9)).join(", ")}] ${unit}`;
+}
+
+function readScenarioState(definition, role) {
+  const spacecraft = definition.spacecraft?.[role] ?? {};
+  const legacyState = definition[`${role}InitialState`] ?? {};
+  return {
+    positionKm: spacecraft.positionKm ?? spacecraft.initialState?.position ?? legacyState.positionKm,
+    velocityKmPerSec: spacecraft.velocityKmPerSec ?? spacecraft.velocityKmPerS ?? spacecraft.initialState?.velocity ?? legacyState.velocityKmPerS,
+  };
 }
 
 function vectorDistance(left, right) {
