@@ -62,6 +62,8 @@ class Submission(Base):
     penalty_score: Mapped[Optional[float]] = mapped_column(Float)
     total_score: Mapped[Optional[float]] = mapped_column(Float)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
+    # Kept for local databases created by the former worker-queue validation flow.
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now

@@ -62,6 +62,7 @@ def initialize_database() -> None:
     Base.metadata.create_all(engine)
     _add_soft_delete_columns_for_existing_database()
     _add_sync_columns_for_existing_database()
+    _add_legacy_submission_columns_for_existing_database()
     with SessionLocal.begin() as session:
         definition_path = BACKEND_ROOT / "docs" / "scenarios" / "small-challenge-v1.json"
         definition = json.loads(definition_path.read_text(encoding="utf-8"))
@@ -162,6 +163,16 @@ def _add_sync_columns_for_existing_database() -> None:
                 connection.execute(text(
                     f"ALTER TABLE sync_settings ADD COLUMN {name} {data_type}"
                 ))
+
+
+def _add_legacy_submission_columns_for_existing_database() -> None:
+    """Keep databases from older validation-worker builds insert-compatible."""
+    existing = {column["name"] for column in inspect(engine).get_columns("submissions")}
+    if "attempt_count" not in existing:
+        with engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE submissions ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0"
+            ))
 
 
 def reset_database(session: Session) -> None:

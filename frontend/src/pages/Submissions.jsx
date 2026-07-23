@@ -247,6 +247,7 @@ export default function Submissions({ onNavigate }) {
 
     const currentRun =
       validationRunRef.current;
+    let failedStep = 2;
 
     setValidationState({
       status: "running",
@@ -265,6 +266,7 @@ export default function Submissions({ onNavigate }) {
       if (!scenario?.scenarioJson || Object.keys(scenario.scenarioJson).length === 0) {
         throw new Error("The selected Scenario has no simulation definition.");
       }
+      failedStep = 3;
       setValidationState((state) => ({
         ...state,
         currentStep: 3,
@@ -278,6 +280,7 @@ export default function Submissions({ onNavigate }) {
       if (localResult.status !== "validated") {
         throw new Error("Local GMAT validation did not pass. The solution was not uploaded.");
       }
+      failedStep = 4;
       const localValidationSeconds = (performance.now() - localValidationStartedAt) / 1000;
       const executionEvidence = localResult.artifacts?.execution ?? null;
       const result = await createSubmission({
@@ -308,7 +311,7 @@ export default function Submissions({ onNavigate }) {
       if (validationRunRef.current !== currentRun) return;
       setValidationState({
         status: "failed",
-        currentStep: 2,
+        currentStep: failedStep,
         message: error.message,
         checkedAt: new Date(),
         submissionId: null,
