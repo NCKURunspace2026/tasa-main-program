@@ -993,7 +993,9 @@ function formatDateTime(date) {
 }
 
 function formatOptionalSeconds(value) {
-  return Number.isFinite(Number(value)) ? `${Number(value).toFixed(6)} s` : "Not reported";
+  if (value == null || value === "") return "Not reported";
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? `${numericValue.toFixed(6)} s` : "Not reported";
 }
 
 function ValidationIcon(props) {

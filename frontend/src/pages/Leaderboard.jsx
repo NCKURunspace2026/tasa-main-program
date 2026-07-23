@@ -411,5 +411,7 @@ function DetailCard({ title, children }) {
 }
 
 function formatOptionalSeconds(value, digits) {
-  return Number.isFinite(Number(value)) ? `${Number(value).toFixed(digits)} s` : "Not reported";
+  if (value == null || value === "") return "Not reported";
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? `${numericValue.toFixed(digits)} s` : "Not reported";
 }
