@@ -50,7 +50,7 @@ const emptyScenarioLimits = {
   minStepSec: "",
   accuracy: "",
   requiredFinalDistanceKm: "",
-  maximumTotalDeltaV: "",
+  maximumDeltaVPerBurn: "",
   maximumMissionTimeSec: "",
   minimumBurnCount: "",
   maximumBurnCount: "",
@@ -113,7 +113,7 @@ const starterScenarioDefinition = {
   },
   validation: {
     requiredFinalDistanceKm: 5,
-    maximumTotalDeltaV: 1.5,
+    maximumDeltaVPerBurn: 1.5,
     maximumMissionTimeSec: 20000,
     minimumBurnCount: 1,
     maximumBurnCount: 5,
@@ -552,7 +552,7 @@ export default function Settings() {
     scenarioJson.validation = {
       ...scenarioJson.validation,
       requiredFinalDistanceKm: nonNegativeNumber(scenarioLimits.requiredFinalDistanceKm, "Required final distance"),
-      maximumTotalDeltaV: positiveNumber(scenarioLimits.maximumTotalDeltaV, "Maximum total Delta-V"),
+      maximumDeltaVPerBurn: positiveNumber(scenarioLimits.maximumDeltaVPerBurn, "Maximum Delta-V per burn"),
       maximumMissionTimeSec: positiveNumber(scenarioLimits.maximumMissionTimeSec, "Maximum mission time"),
       minimumBurnCount: positiveInteger(scenarioLimits.minimumBurnCount, "Minimum burn count"),
       maximumBurnCount: positiveInteger(scenarioLimits.maximumBurnCount, "Maximum burn count"),
@@ -904,7 +904,7 @@ export default function Settings() {
                 <div className="scenario-limit-heading">Validation limits</div>
                 <div className="scenario-parameter-grid">
                   <ScenarioNumberField label="Δr_req" description="Intercept distance threshold, km" name="requiredFinalDistanceKm" value={scenarioLimits.requiredFinalDistanceKm} onChange={updateScenarioLimit} />
-                  <ScenarioNumberField label="ΔVlim" description="Total Delta-V limit, km/s" name="maximumTotalDeltaV" value={scenarioLimits.maximumTotalDeltaV} onChange={updateScenarioLimit} />
+                  <ScenarioNumberField label="ΔVburn" description="Maximum Delta-V per burn, km/s" name="maximumDeltaVPerBurn" value={scenarioLimits.maximumDeltaVPerBurn} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="Tmax" description="Maximum mission time, s" name="maximumMissionTimeSec" value={scenarioLimits.maximumMissionTimeSec} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="N_min" description="Minimum burn count" name="minimumBurnCount" value={scenarioLimits.minimumBurnCount} onChange={updateScenarioLimit} integer />
                   <ScenarioNumberField label="N_max" description="Maximum burn count" name="maximumBurnCount" value={scenarioLimits.maximumBurnCount} onChange={updateScenarioLimit} integer />
@@ -1103,7 +1103,7 @@ function ScenarioOverview({ scenario }) {
         <ScenarioOverviewItem label="Chaser r0" value={formatVector(chaser.positionKm, "km")} wide />
         <ScenarioOverviewItem label="Chaser v0" value={formatVector(chaser.velocityKmPerSec, "km/s")} wide />
         <ScenarioOverviewItem label="Required distance" value={`${validation.requiredFinalDistanceKm ?? "?"} km`} />
-        <ScenarioOverviewItem label="Max Delta-V" value={`${validation.maximumTotalDeltaV ?? "?"} km/s`} />
+        <ScenarioOverviewItem label="Max Delta-V per burn" value={`${validation.maximumDeltaVPerBurn ?? validation.maximumTotalDeltaV ?? "?"} km/s`} />
         <ScenarioOverviewItem label="Max mission time" value={`${validation.maximumMissionTimeSec ?? "?"} s`} />
       </div>
     </section>
@@ -1188,6 +1188,7 @@ function readScenarioLimits(definition) {
       key,
       String(propagator[key] ?? validation[key] ?? scoreConfig[key] ?? ""),
     ])),
+    maximumDeltaVPerBurn: String(validation.maximumDeltaVPerBurn ?? validation.maximumTotalDeltaV ?? ""),
     centralBody: forceModel.centralBody ?? "Earth",
     gravityEnabled: gravity.enabled ?? Object.keys(gravity).length > 0,
     gravityDegree: String(gravity.degree ?? 0),

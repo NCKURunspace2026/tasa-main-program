@@ -9,7 +9,7 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
   const definition = scenario.scenarioJson ?? scenario.definition ?? {};
   const limits = definition.validation ?? definition.constraints ?? {};
   const finalDistanceLimit = limits.requiredFinalDistanceKm ?? limits.interceptionDistance ?? limits.finalDistanceThreshold ?? limits.maximumFinalDistance;
-  const deltaVLimit = limits.maximumTotalDeltaV ?? limits.maximumDeltaVPerBurn;
+  const deltaVPerBurnLimit = limits.maximumDeltaVPerBurn ?? limits.maximumTotalDeltaV;
   const timeLimit = limits.maximumSimulationTimeSec
     ?? limits.maximumMissionTimeSec
     ?? limits.maximumMissionTime;
@@ -18,9 +18,20 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
   const minimumBurnSeparation = limits.minimumBurnSeparationSec;
   const constraints = [
     ["minimumDistance", propagation.minimumDistanceKm, finalDistanceLimit],
-    ["totalDeltaV", totalDeltaV, deltaVLimit],
     ["totalTime", totalTime, timeLimit],
   ].filter(([, , limit]) => Number.isFinite(limit)).map(([name, value, limit]) => ({ name, value, limit, operator: "<=", satisfied: value <= limit }));
+  if (Number.isFinite(deltaVPerBurnLimit)) {
+    finalDecisionVariables.burns.forEach((burn, index) => {
+      const value = magnitude(burn.deltaV);
+      constraints.push({
+        name: `burn${index + 1}DeltaV`,
+        value,
+        limit: deltaVPerBurnLimit,
+        operator: "<=",
+        satisfied: value <= deltaVPerBurnLimit,
+      });
+    });
+  }
   if (Number.isFinite(minimumBurnCount)) {
     constraints.push({
       name: "minimumBurnCount",

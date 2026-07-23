@@ -442,6 +442,7 @@ function SubmissionScenarioSummary({ scenario }) {
       <div><span>Target r0</span><strong>{formatScenarioVector(target.positionKm, "km")}</strong></div>
       <div><span>Chaser r0</span><strong>{formatScenarioVector(chaser.positionKm, "km")}</strong></div>
       <div><span>Required distance</span><strong>{validation.requiredFinalDistanceKm ?? "?"} km</strong></div>
+      <div><span>Max Delta-V per burn</span><strong>{validation.maximumDeltaVPerBurn ?? validation.maximumTotalDeltaV ?? "?"} km/s</strong></div>
     </section>
   );
 }

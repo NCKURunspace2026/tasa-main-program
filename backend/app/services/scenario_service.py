@@ -221,7 +221,9 @@ def normalize_scenario(definition: dict) -> dict:
     validation = definition.get("validation")
     if not isinstance(validation, dict):
         raise InvalidScenarioError("validation must be a JSON object.")
-    for key in ("requiredFinalDistanceKm", "maximumTotalDeltaV", "maximumMissionTimeSec"):
+    if "maximumDeltaVPerBurn" not in validation and "maximumTotalDeltaV" in validation:
+        validation["maximumDeltaVPerBurn"] = validation["maximumTotalDeltaV"]
+    for key in ("requiredFinalDistanceKm", "maximumDeltaVPerBurn", "maximumMissionTimeSec"):
         _finite_number(validation.get(key), f"validation.{key}", minimum=0)
     minimum_burns_value = _finite_number(
         validation.get("minimumBurnCount"), "validation.minimumBurnCount", minimum=1,

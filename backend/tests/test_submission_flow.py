@@ -107,6 +107,33 @@ def test_unvalidated_or_inconsistent_client_result_is_rejected():
         assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 0
 
 
+def test_delta_v_limit_applies_per_burn_not_total_delta_v():
+    payload = submission_payload()
+    payload["solution"]["decisionVariables"] = {
+        "tWait": 0,
+        "burns": [
+            {"deltaV": [1.0, 0, 0], "timeToNextBurn": 100},
+            {"deltaV": [1.0, 0, 0]},
+        ],
+        "finalCoastTime": 5000,
+    }
+    payload["clientValidation"]["missionTimeSec"] = 5100
+    payload["clientValidation"]["totalDeltaVKmPerSec"] = 2.0
+    with TestClient(app) as client:
+        response = client.post("/api/submissions", json=payload)
+        assert response.status_code == 201
+
+
+def test_delta_v_limit_rejects_single_burn_above_limit():
+    payload = submission_payload()
+    payload["solution"]["decisionVariables"]["burns"] = [{"deltaV": [1.6, 0, 0]}]
+    payload["clientValidation"]["totalDeltaVKmPerSec"] = 1.6
+    with TestClient(app) as client:
+        response = client.post("/api/submissions", json=payload)
+        assert response.status_code == 422
+        assert "per-burn" in response.json()["detail"]
+
+
 def test_scenario_publish_normalizes_force_model_and_physical_properties():
     definition = scenario_json()
     definition["forceModel"] = {
