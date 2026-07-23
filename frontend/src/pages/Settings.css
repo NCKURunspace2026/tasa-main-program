@@ -377,6 +377,79 @@
 .scenario-admin-list strong { color: #78b7f2; }
 .scenario-admin-list span { color: var(--text-secondary); }
 
+.settings-page .solution-remove-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 9px;
+  background: rgba(127, 29, 29, 0.12);
+  color: #fecaca;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 11, 22, 0.68);
+}
+
+.settings-dialog {
+  width: min(460px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+.settings-dialog h2 {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+
+.settings-dialog p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-dialog input {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(3, 11, 22, 0.3);
+  color: var(--text-primary);
+}
+
+.settings-dialog-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.settings-dialog-actions button:not(.solution-remove-button) {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(148, 163, 184, 0.05);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .settings-message {
   margin: 0;
   padding: 12px 14px;

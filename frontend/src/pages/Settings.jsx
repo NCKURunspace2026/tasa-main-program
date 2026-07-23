@@ -5,6 +5,7 @@ import "./Settings.css";
 import PageHeader from "../components/PageHeader.jsx";
 import {
   createScenario,
+  deleteScenario,
   downloadDataExport,
   getCloudAddress,
   getScenarios,
@@ -164,6 +165,9 @@ export default function Settings() {
   const [scriptPreview, setScriptPreview] = useState("");
   const [scriptPreviewError, setScriptPreviewError] = useState("");
   const [showScenarioFormat, setShowScenarioFormat] = useState(false);
+  const [scenarioRemoval, setScenarioRemoval] = useState(null);
+  const [scenarioRemovalPassword, setScenarioRemovalPassword] = useState("");
+  const [isRemovingScenario, setIsRemovingScenario] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     configured: false,
     currentPassword: "",
@@ -445,6 +449,7 @@ export default function Settings() {
       ));
       setScenarioForm(newScenarioForm());
       setMessage(`${created.scenarioId} published.`);
+      runDataSync().catch(() => {});
     } catch (error) {
       setMessage(error instanceof SyntaxError
         ? "Scenario JSON is not valid JSON."
@@ -572,6 +577,7 @@ export default function Settings() {
       )));
       setScenarioLimits(readScenarioLimits(updated.scenarioJson));
       setMessage(`${updated.scenarioId} limits saved to this device.`);
+      runDataSync().catch(() => {});
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -587,6 +593,40 @@ export default function Settings() {
         : `${filename} downloaded with active ML-ready records only.`);
     } catch (error) {
       setMessage(error.message);
+    }
+  }
+
+  function removeScenario(scenario) {
+    if (!window.confirm(
+      `Remove ${scenario.scenarioId} from active Scenario lists? Its Scenario definition and Solutions remain archived for export and synchronization.`,
+    )) return;
+    setScenarioRemoval(scenario);
+    setScenarioRemovalPassword("");
+  }
+
+  async function confirmRemoveScenario(event) {
+    event.preventDefault();
+    if (!scenarioRemoval || isRemovingScenario) return;
+    setIsRemovingScenario(true);
+    setMessage("");
+    try {
+      await deleteScenario(scenarioRemoval.scenarioId, scenarioRemovalPassword);
+      setScenarios((current) => {
+        const next = current.filter((item) => item.scenarioId !== scenarioRemoval.scenarioId);
+        if (selectedScenarioId === scenarioRemoval.scenarioId) {
+          setSelectedScenarioId(next[0]?.scenarioId ?? "");
+          setScenarioLimits(next[0] ? readScenarioLimits(next[0].scenarioJson) : emptyScenarioLimits);
+        }
+        return next;
+      });
+      setScenarioRemoval(null);
+      setScenarioRemovalPassword("");
+      setMessage(`${scenarioRemoval.scenarioId} removed from active Scenario lists.`);
+      runDataSync().catch(() => {});
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setIsRemovingScenario(false);
     }
   }
 
@@ -924,6 +964,9 @@ export default function Settings() {
                 {scenarios.map((scenario) => (
                   <article key={scenario.scenarioId}>
                     <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
+                    <button className="solution-remove-button" type="button" onClick={() => removeScenario(scenario)}>
+                      Remove
+                    </button>
                   </article>
                 ))}
               </div>
@@ -948,6 +991,41 @@ export default function Settings() {
           {message ? <p className="settings-message">{message}</p> : null}
         </main>
       </div>
+      {scenarioRemoval ? (
+        <div className="settings-dialog-backdrop" role="presentation">
+          <form
+            className="settings-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-scenario-title"
+            onSubmit={confirmRemoveScenario}
+          >
+            <p className="submission-panel-eyebrow">Protected action</p>
+            <h2 id="remove-scenario-title">Enter administration password</h2>
+            <p>Remove {scenarioRemoval.scenarioId} from active Scenario lists. Existing data remains archived.</p>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={scenarioRemovalPassword}
+              onChange={(event) => setScenarioRemovalPassword(event.target.value)}
+              autoFocus
+              required
+            />
+            <div className="settings-dialog-actions">
+              <button
+                type="button"
+                onClick={() => { setScenarioRemoval(null); setScenarioRemovalPassword(""); }}
+                disabled={isRemovingScenario}
+              >
+                Cancel
+              </button>
+              <button className="solution-remove-button" type="submit" disabled={isRemovingScenario}>
+                {isRemovingScenario ? "Removing…" : "Confirm Remove"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }

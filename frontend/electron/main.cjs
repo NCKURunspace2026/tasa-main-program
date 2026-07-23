@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
     if (String(requestOptions.method ?? "GET").toUpperCase() === "DELETE") {
       const securityConfig = configStore.read();
       if (!securityConfig.adminPasswordHash) {
-        throw new Error("Set a device administration password in Settings before removing a Solution.");
+        throw new Error("Set a device administration password in Settings before removing records.");
       }
       if (!verifyPassword(adminPassword, securityConfig)) {
         throw new Error("The device administration password is incorrect.");

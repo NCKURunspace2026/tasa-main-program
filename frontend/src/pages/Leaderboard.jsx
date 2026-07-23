@@ -4,7 +4,7 @@ import "./Leaderboard.css";
 
 import PageHeader from "../components/PageHeader.jsx";
 import useScenarios from "../hooks/useScenarios.js";
-import { deleteSolution, getLeaderboard, getSolutionDetail } from "../services/api.js";
+import { deleteSolution, getLeaderboard, getSolutionDetail, runDataSync } from "../services/api.js";
 
 import { Table, pixel } from "@astryxdesign/core/Table";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
@@ -215,6 +215,7 @@ export default function Leaderboard() {
       params.delete("solutionId");
       window.history.replaceState({}, "", `?${params.toString()}`);
       setRefreshVersion((value) => value + 1);
+      runDataSync().catch(() => {});
     } catch (requestError) {
       setDetailError(requestError.message);
     } finally {

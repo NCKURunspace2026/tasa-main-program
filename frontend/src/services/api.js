@@ -123,6 +123,10 @@ export function updateScenario(scenarioId, scenario) {
   });
 }
 
+export function deleteScenario(scenarioId, adminPassword) {
+  return adminRequest(`/scenarios/${scenarioId}`, { method: "DELETE", adminPassword });
+}
+
 export function deleteSolution(solutionId, adminPassword) {
   return adminRequest(`/solutions/${solutionId}`, { method: "DELETE", adminPassword });
 }

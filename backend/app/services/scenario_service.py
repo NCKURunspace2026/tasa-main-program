@@ -255,8 +255,6 @@ def normalize_scenario(definition: dict) -> dict:
 
 
 def list_scenarios(session: Session) -> list[dict]:
-    # Scenarios are permanent simulation definitions. Unlike Solutions, they
-    # are never hidden because an empty active list creates an unusable client.
     scenarios = scenario_repository.find_all(session)
     return [_serialize(scenario) for scenario in scenarios]
 
@@ -267,7 +265,7 @@ def get_scenario(session: Session, scenario_id: str) -> dict | None:
 
 
 def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
-    if scenario_repository.find_by_id(session, payload.scenarioId) is not None:
+    if scenario_repository.find_by_id(session, payload.scenarioId, include_inactive=True) is not None:
         raise ScenarioAlreadyExistsError(f"Scenario {payload.scenarioId} already exists.")
     definition = normalize_scenario(payload.scenarioJson)
     scenario = Scenario(
@@ -279,6 +277,17 @@ def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
         status="active",
     )
     scenario_repository.create(session, scenario)
+    session.commit()
+    return _serialize(scenario)
+
+
+def set_scenario_inactive(session: Session, scenario_id: str) -> dict | None:
+    scenario = scenario_repository.find_by_id(session, scenario_id, include_inactive=True)
+    if scenario is None:
+        return None
+    scenario.status = "inactive"
+    scenario.updated_at = utc_now()
+    scenario_repository.update(session, scenario)
     session.commit()
     return _serialize(scenario)
 

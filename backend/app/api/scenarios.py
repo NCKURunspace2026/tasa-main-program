@@ -9,8 +9,10 @@ from ..services.scenario_service import (
     create_scenario,
     get_scenario,
     list_scenarios,
+    set_scenario_inactive,
     update_scenario,
 )
+from .solutions import require_admin_token
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
@@ -56,3 +58,11 @@ def put_scenario(
     if updated is None:
         raise HTTPException(status_code=404, detail="Scenario not found.")
     return updated
+
+
+@router.delete("/{scenario_id}", dependencies=[Depends(require_admin_token)])
+def delete_scenario(scenario_id: str, session: Session = Depends(get_db)):
+    result = set_scenario_inactive(session, scenario_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Scenario not found.")
+    return result

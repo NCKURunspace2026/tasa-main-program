@@ -139,9 +139,15 @@ def test_scenario_publish_normalizes_force_model_and_physical_properties():
         assert response.status_code == 422
 
 
-def test_scenario_inactive_and_parse_compatibility_routes_are_removed():
+def test_scenario_can_be_soft_deleted_with_admin_token():
     with TestClient(app) as client:
-        assert client.delete("/api/scenarios/SC-001").status_code == 405
+        assert client.delete("/api/scenarios/SC-001").status_code == 403
+        deleted = client.delete("/api/scenarios/SC-001", headers=ADMIN_HEADERS)
+        assert deleted.status_code == 200
+        assert deleted.json()["status"] == "inactive"
+        assert client.get("/api/scenarios").json()["items"] == []
+        assert client.get("/api/scenarios/SC-001").status_code == 404
+        assert client.post("/api/submissions", json=submission_payload()).status_code == 404
         assert client.post("/api/scenarios/SC-001/restore").status_code == 404
         assert client.post("/api/scenarios/parse", json={"scenarioJson": scenario_json()}).status_code == 405
 

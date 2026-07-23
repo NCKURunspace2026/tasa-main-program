@@ -115,13 +115,6 @@ def initialize_database() -> None:
                 scenario_definition["spacecraft"] = spacecraft
                 scenario.scenario_json = scenario_definition
                 scenario.updated_at = datetime.now(timezone.utc)
-        session.query(Scenario).filter(Scenario.status != "active").update(
-            {
-                Scenario.status: "active",
-                Scenario.updated_at: datetime.now(timezone.utc),
-            },
-            synchronize_session=False,
-        )
         if session.get(SyncRelayState, 1) is None:
             session.add(SyncRelayState(id=1, generation_id=uuid4().hex))
         if session.query(SyncEvent).count() == 0:
@@ -180,4 +173,8 @@ def reset_database(session: Session) -> None:
         if table.name != "scenarios":
             session.execute(table.delete())
     session.query(Scenario).filter(Scenario.id != "SC-001").delete(synchronize_session=False)
+    session.query(Scenario).filter(Scenario.id == "SC-001").update(
+        {Scenario.status: "active"},
+        synchronize_session=False,
+    )
     session.commit()

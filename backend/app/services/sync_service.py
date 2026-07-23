@@ -395,7 +395,7 @@ def _scenario_record(scenario: Scenario) -> dict:
         "description": scenario.description,
         "scenarioJson": scenario.scenario_json,
         "schemaVersion": scenario.schema_version,
-        "status": "active",
+        "status": scenario.status,
         "createdAt": _iso(scenario.created_at),
         "updatedAt": _iso(scenario.updated_at),
     }
@@ -490,7 +490,7 @@ def _import_scenario(session: Session, record: dict) -> None:
     scenario.description = payload.get("description", "")
     scenario.scenario_json = definition
     scenario.schema_version = definition["schemaVersion"]
-    scenario.status = "active"
+    scenario.status = payload.get("status", "active")
     scenario.created_at = _datetime(payload["createdAt"])
     scenario.updated_at = _datetime(payload["updatedAt"])
 
