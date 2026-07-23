@@ -265,11 +265,12 @@ def get_scenario(session: Session, scenario_id: str) -> dict | None:
 
 
 def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
-    if scenario_repository.find_by_id(session, payload.scenarioId, include_inactive=True) is not None:
-        raise ScenarioAlreadyExistsError(f"Scenario {payload.scenarioId} already exists.")
+    scenario_id = payload.scenarioId or _next_scenario_id(session)
+    if scenario_repository.find_by_id(session, scenario_id, include_inactive=True) is not None:
+        raise ScenarioAlreadyExistsError(f"Scenario {scenario_id} already exists.")
     definition = normalize_scenario(payload.scenarioJson)
     scenario = Scenario(
-        id=payload.scenarioId,
+        id=scenario_id,
         name=payload.name.strip(),
         description=payload.description.strip(),
         scenario_json=definition,
@@ -279,6 +280,15 @@ def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
     scenario_repository.create(session, scenario)
     session.commit()
     return _serialize(scenario)
+
+
+def _next_scenario_id(session: Session) -> str:
+    highest = 0
+    for scenario in scenario_repository.find_all(session, include_inactive=True):
+        match = re.fullmatch(r"SC-(\d+)", scenario.id)
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"SC-{highest + 1:03d}"
 
 
 def set_scenario_inactive(session: Session, scenario_id: str) -> dict | None:

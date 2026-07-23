@@ -118,12 +118,12 @@ def test_scenario_publish_normalizes_force_model_and_physical_properties():
     }
     with TestClient(app) as client:
         created = client.post("/api/scenarios", json={
-            "scenarioId": "SC-003",
             "name": "Rendezvous Challenge",
             "description": "Two-spacecraft test.",
             "scenarioJson": definition,
         })
         assert created.status_code == 201
+        assert created.json()["scenarioId"] == "SC-002"
         saved = created.json()["scenarioJson"]
         assert saved["forceModel"]["gravity"]["degree"] == 4
         assert saved["forceModel"]["pointMasses"] == ["Sun", "Luna"]
@@ -132,11 +132,23 @@ def test_scenario_publish_normalizes_force_model_and_physical_properties():
         invalid = scenario_json()
         invalid["propagator"]["minStepSec"] = 2
         response = client.post("/api/scenarios", json={
-            "scenarioId": "SC-004",
             "name": "Invalid",
             "scenarioJson": invalid,
         })
         assert response.status_code == 422
+
+
+def test_scenario_update_can_rename_existing_scenario():
+    with TestClient(app) as client:
+        response = client.put("/api/scenarios/SC-001", json={
+            "name": "Renamed Scenario",
+            "description": "Updated description.",
+            "scenarioJson": scenario_json(),
+        })
+        assert response.status_code == 200
+        assert response.json()["scenarioId"] == "SC-001"
+        assert response.json()["name"] == "Renamed Scenario"
+        assert response.json()["description"] == "Updated description."
 
 
 def test_scenario_can_be_soft_deleted_with_admin_token():

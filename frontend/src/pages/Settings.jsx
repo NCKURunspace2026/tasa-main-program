@@ -132,7 +132,6 @@ const starterScenarioDefinition = {
 };
 
 const scenarioPackageTemplate = {
-  scenarioId: "SC-003",
   name: "Rendezvous Challenge",
   description: "Chaser performs one or more impulsive maneuvers to intercept the target within the configured distance threshold.",
   scenarioJson: starterScenarioDefinition,
@@ -140,9 +139,8 @@ const scenarioPackageTemplate = {
 
 function newScenarioForm() {
   return {
-  scenarioId: "",
-  name: "",
-  description: "",
+    name: "",
+    description: "",
     scenarioJson: JSON.stringify(starterScenarioDefinition, null, 2),
   };
 }
@@ -157,6 +155,7 @@ export default function Settings() {
   const [scenarioForm, setScenarioForm] = useState(newScenarioForm);
   const [isPublishing, setIsPublishing] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
+  const [scenarioDetails, setScenarioDetails] = useState({ name: "", description: "" });
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
   const [isSavingScenario, setIsSavingScenario] = useState(false);
   const [includeArchivedExport, setIncludeArchivedExport] = useState(false);
@@ -195,6 +194,10 @@ export default function Settings() {
           setScenarios(result.items);
           if (result.items.length > 0) {
             setSelectedScenarioId(result.items[0].scenarioId);
+            setScenarioDetails({
+              name: result.items[0].name,
+              description: result.items[0].description,
+            });
             setScenarioLimits(readScenarioLimits(result.items[0].scenarioJson));
           }
         }
@@ -313,7 +316,6 @@ export default function Settings() {
       setMessage("Scenario JSON package template copied.");
     } catch {
       setScenarioForm({
-        scenarioId: scenarioPackageTemplate.scenarioId,
         name: scenarioPackageTemplate.name,
         description: scenarioPackageTemplate.description,
         scenarioJson: JSON.stringify(scenarioPackageTemplate.scenarioJson, null, 2),
@@ -337,7 +339,6 @@ export default function Settings() {
 
   function loadScenarioFormat() {
     setScenarioForm({
-      scenarioId: scenarioPackageTemplate.scenarioId,
       name: scenarioPackageTemplate.name,
       description: scenarioPackageTemplate.description,
       scenarioJson: JSON.stringify(scenarioPackageTemplate.scenarioJson, null, 2),
@@ -439,7 +440,6 @@ export default function Settings() {
     setMessage("");
     try {
       const created = await createScenario({
-        scenarioId: scenarioForm.scenarioId.trim().toUpperCase(),
         name: scenarioForm.name.trim(),
         description: scenarioForm.description.trim(),
         scenarioJson: JSON.parse(scenarioForm.scenarioJson),
@@ -466,7 +466,6 @@ export default function Settings() {
     try {
       const data = JSON.parse(await file.text());
       setScenarioForm({
-        scenarioId: String(data.scenarioId ?? ""),
         name: String(data.name ?? ""),
         description: String(data.description ?? ""),
         scenarioJson: JSON.stringify(data.scenarioJson ?? data.definition ?? {}, null, 2),
@@ -482,7 +481,16 @@ export default function Settings() {
     const scenarioId = event.target.value;
     const scenario = scenarios.find((item) => item.scenarioId === scenarioId);
     setSelectedScenarioId(scenarioId);
+    setScenarioDetails({
+      name: scenario?.name ?? "",
+      description: scenario?.description ?? "",
+    });
     setScenarioLimits(readScenarioLimits(scenario?.scenarioJson ?? {}));
+  }
+
+  function updateScenarioDetails(event) {
+    const { name, value } = event.target;
+    setScenarioDetails((current) => ({ ...current, [name]: value }));
   }
 
   function updateScenarioLimit(event) {
@@ -568,15 +576,16 @@ export default function Settings() {
         throw new Error("Minimum burn count cannot be greater than maximum burn count.");
       }
       const updated = await updateScenarioRequest(selectedScenarioId, {
-        name: scenario.name,
-        description: scenario.description,
+        name: scenarioDetails.name.trim(),
+        description: scenarioDetails.description.trim(),
         scenarioJson,
       });
       setScenarios((current) => current.map((item) => (
         item.scenarioId === updated.scenarioId ? updated : item
       )));
+      setScenarioDetails({ name: updated.name, description: updated.description });
       setScenarioLimits(readScenarioLimits(updated.scenarioJson));
-      setMessage(`${updated.scenarioId} limits saved to this device.`);
+      setMessage(`${updated.scenarioId} details and limits saved to this device.`);
       runDataSync().catch(() => {});
     } catch (error) {
       setMessage(error.message);
@@ -615,6 +624,10 @@ export default function Settings() {
         const next = current.filter((item) => item.scenarioId !== scenarioRemoval.scenarioId);
         if (selectedScenarioId === scenarioRemoval.scenarioId) {
           setSelectedScenarioId(next[0]?.scenarioId ?? "");
+          setScenarioDetails({
+            name: next[0]?.name ?? "",
+            description: next[0]?.description ?? "",
+          });
           setScenarioLimits(next[0] ? readScenarioLimits(next[0].scenarioJson) : emptyScenarioLimits);
         }
         return next;
@@ -827,6 +840,23 @@ export default function Settings() {
                     ))}
                   </select>
                 </SettingsRow>
+                <SettingsRow label="Scenario name">
+                  <input
+                    name="name"
+                    value={scenarioDetails.name}
+                    onChange={updateScenarioDetails}
+                    required
+                    disabled={!selectedScenarioId}
+                  />
+                </SettingsRow>
+                <SettingsRow label="Description">
+                  <textarea
+                    name="description"
+                    value={scenarioDetails.description}
+                    onChange={updateScenarioDetails}
+                    disabled={!selectedScenarioId}
+                  />
+                </SettingsRow>
                 <div className="scenario-limit-heading">Force Model</div>
                 <p className="scenario-model-note">
                   Central-body point-mass gravity is always applied. Gravity field enables spherical harmonics above that baseline.
@@ -877,7 +907,7 @@ export default function Settings() {
                   <ScenarioNumberField label="W_v" description="Delta-V score weight" name="deltaVWeight" value={scenarioLimits.deltaVWeight} onChange={updateScenarioLimit} allowZero />
                 </div>
                 <button className="settings-primary-button" type="submit" disabled={isSavingScenario || !selectedScenarioId}>
-                  {isSavingScenario ? "Saving…" : "Save Scenario Limits"}
+                  {isSavingScenario ? "Saving…" : "Save Scenario"}
                 </button>
                 <button className="settings-secondary-button" type="button" onClick={previewGmatScript} disabled={!selectedScenarioId}>
                   Preview GMAT Script
@@ -897,7 +927,7 @@ export default function Settings() {
               <div className="scenario-schema-guide">
                 <strong>Scenario JSON map</strong>
                 <div>
-                  <code>scenarioId</code><span>Package field outside scenarioJson. Use IDs like SC-003.</span>
+                  <code>scenarioId</code><span>Assigned automatically when the Scenario is published.</span>
                   <code>name / description</code><span>Package fields shown in Scenario selectors and administration.</span>
                   <code>epoch</code><span>Initial epoch and time system</span>
                   <code>spacecraft.target / chaser</code><span>Cartesian position (km) and velocity (km/s)</span>
@@ -920,7 +950,7 @@ export default function Settings() {
                 <div className="scenario-format-preview">
                   <div>
                     <strong>Complete Scenario package format</strong>
-                    <span>Load JSON Package accepts this full object. The manual form below separates scenarioId, name, description, and scenarioJson into individual fields.</span>
+                    <span>Load JSON Package accepts this full object. The manual form below separates name, description, and scenarioJson into individual fields. Scenario ID is generated automatically.</span>
                   </div>
                   <pre>{JSON.stringify(scenarioPackageTemplate, null, 2)}</pre>
                 </div>
@@ -933,9 +963,7 @@ export default function Settings() {
                 Reset to Complete Template
               </button>
               <form className="scenario-create-form" onSubmit={publishScenario}>
-                <SettingsRow label="Scenario ID">
-                  <input name="scenarioId" value={scenarioForm.scenarioId} onChange={updateScenario} placeholder="SC-003" required />
-                </SettingsRow>
+                <p className="settings-section-note">Scenario ID is assigned automatically using the next available SC number.</p>
                 <SettingsRow label="Name">
                   <input name="name" value={scenarioForm.name} onChange={updateScenario} required />
                 </SettingsRow>
