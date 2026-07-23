@@ -651,6 +651,8 @@ export default function Settings() {
     }
   }
 
+  const selectedScenario = scenarios.find((item) => item.scenarioId === selectedScenarioId);
+
   return (
     <section className="settings-page">
       <PageHeader
@@ -873,6 +875,7 @@ export default function Settings() {
                     Preview GMAT Script
                   </button>
                 </div>
+                <ScenarioOverview scenario={selectedScenario} />
                 <div className="scenario-limit-heading">Force Model</div>
                 <p className="scenario-model-note">
                   Central-body point-mass gravity is always applied. Gravity field enables spherical harmonics above that baseline.
@@ -1065,6 +1068,57 @@ export default function Settings() {
       </div>
     </section>
   );
+}
+
+function ScenarioOverview({ scenario }) {
+  if (!scenario?.scenarioJson) return null;
+  const definition = scenario.scenarioJson;
+  const target = definition.spacecraft?.target ?? {};
+  const chaser = definition.spacecraft?.chaser ?? {};
+  const validation = definition.validation ?? {};
+  const initialDistance = vectorDistance(target.positionKm, chaser.positionKm);
+  return (
+    <section className="scenario-overview">
+      <div className="scenario-overview-header">
+        <div>
+          <strong>Scenario Overview</strong>
+          <span>These are the actual initial states used by GMAT validation.</span>
+        </div>
+        <code>{scenario.scenarioId}</code>
+      </div>
+      <div className="scenario-overview-grid">
+        <ScenarioOverviewItem label="Epoch" value={definition.epoch?.value ?? definition.epoch ?? "Not set"} />
+        <ScenarioOverviewItem label="Coordinate system" value={definition.coordinateSystem ?? "EarthMJ2000Eq"} />
+        <ScenarioOverviewItem label="Initial distance" value={initialDistance == null ? "Unknown" : `${initialDistance.toFixed(6)} km`} />
+        <ScenarioOverviewItem label="Target r0" value={formatVector(target.positionKm, "km")} wide />
+        <ScenarioOverviewItem label="Target v0" value={formatVector(target.velocityKmPerSec, "km/s")} wide />
+        <ScenarioOverviewItem label="Chaser r0" value={formatVector(chaser.positionKm, "km")} wide />
+        <ScenarioOverviewItem label="Chaser v0" value={formatVector(chaser.velocityKmPerSec, "km/s")} wide />
+        <ScenarioOverviewItem label="Required distance" value={`${validation.requiredFinalDistanceKm ?? "?"} km`} />
+        <ScenarioOverviewItem label="Max Delta-V" value={`${validation.maximumTotalDeltaV ?? "?"} km/s`} />
+        <ScenarioOverviewItem label="Max mission time" value={`${validation.maximumMissionTimeSec ?? "?"} s`} />
+      </div>
+    </section>
+  );
+}
+
+function ScenarioOverviewItem({ label, value, wide = false }) {
+  return (
+    <div className={wide ? "is-wide" : ""}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function formatVector(values, unit) {
+  if (!Array.isArray(values) || values.length !== 3) return "Unknown";
+  return `[${values.map((value) => Number(value).toFixed(9)).join(", ")}] ${unit}`;
+}
+
+function vectorDistance(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== 3 || right.length !== 3) return null;
+  return Math.hypot(...left.map((value, index) => Number(value) - Number(right[index])));
 }
 
 function ScenarioNumberField({ label, description, name, value, onChange, integer = false, allowZero = false, disabled = false }) {

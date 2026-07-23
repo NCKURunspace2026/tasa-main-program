@@ -81,6 +81,42 @@
   gap: 20px;
 }
 
+.submission-scenario-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(120, 183, 242, 0.22);
+  border-radius: 14px;
+  background: rgba(10, 22, 40, 0.72);
+}
+
+.submission-scenario-summary > div {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  background: rgba(3, 11, 22, 0.28);
+}
+
+.submission-scenario-summary span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.submission-scenario-summary strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 /* ========================================
    Shared panels
 ======================================== */

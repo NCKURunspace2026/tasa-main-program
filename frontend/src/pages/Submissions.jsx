@@ -278,7 +278,7 @@ export default function Submissions({ onNavigate }) {
         finalDecisionVariables: submission.solution.decisionVariables,
       });
       if (localResult.status !== "validated") {
-        throw new Error("Local GMAT validation did not pass. The solution was not uploaded.");
+        throw new Error(formatValidationFailure(localResult));
       }
       failedStep = 4;
       const localValidationSeconds = (performance.now() - localValidationStartedAt) / 1000;
@@ -329,6 +329,8 @@ export default function Submissions({ onNavigate }) {
     );
   }
 
+  const selectedScenario = scenarioOptions.find((item) => item.id === scenarioId);
+
   return (
     <section className="submissions-page">
       <PageHeader
@@ -369,6 +371,8 @@ export default function Submissions({ onNavigate }) {
         </div>
       </PageHeader>
 
+      <SubmissionScenarioSummary scenario={selectedScenario} />
+
       <div className="submission-main-layout">
         <section className="submission-panel submission-workspace-panel">
           <header className="submission-panel-header">
@@ -408,6 +412,48 @@ export default function Submissions({ onNavigate }) {
       </div>
     </section>
   );
+}
+
+function formatValidationFailure(result) {
+  const failed = (result.constraints ?? []).filter((constraint) => !constraint.satisfied);
+  if (failed.length === 0) return "Local GMAT validation did not pass. The solution was not uploaded.";
+  return `Validation failed: ${failed.map((constraint) => `${constraint.name} ${formatMetric(constraint.value)} ${constraint.operator} ${formatMetric(constraint.limit)} was not satisfied`).join("; ")}.`;
+}
+
+function formatMetric(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(6) : String(value);
+}
+
+function SubmissionScenarioSummary({ scenario }) {
+  if (!scenario?.scenarioJson) return null;
+  const definition = scenario.scenarioJson;
+  const target = definition.spacecraft?.target ?? {};
+  const chaser = definition.spacecraft?.chaser ?? {};
+  const validation = definition.validation ?? {};
+  const initialDistance = scenarioVectorDistance(target.positionKm, chaser.positionKm);
+  return (
+    <section className="submission-scenario-summary">
+      <div>
+        <span>Selected Scenario</span>
+        <strong>{scenario.id}: {scenario.label.replace(`${scenario.id}: `, "")}</strong>
+      </div>
+      <div><span>Epoch</span><strong>{definition.epoch?.value ?? definition.epoch ?? "Not set"}</strong></div>
+      <div><span>Initial distance</span><strong>{initialDistance == null ? "Unknown" : `${initialDistance.toFixed(6)} km`}</strong></div>
+      <div><span>Target r0</span><strong>{formatScenarioVector(target.positionKm, "km")}</strong></div>
+      <div><span>Chaser r0</span><strong>{formatScenarioVector(chaser.positionKm, "km")}</strong></div>
+      <div><span>Required distance</span><strong>{validation.requiredFinalDistanceKm ?? "?"} km</strong></div>
+    </section>
+  );
+}
+
+function formatScenarioVector(values, unit) {
+  if (!Array.isArray(values) || values.length !== 3) return "Unknown";
+  return `[${values.map((value) => Number(value).toFixed(6)).join(", ")}] ${unit}`;
+}
+
+function scenarioVectorDistance(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== 3 || right.length !== 3) return null;
+  return Math.hypot(...left.map((value, index) => Number(value) - Number(right[index])));
 }
 
 function ManualSubmission({

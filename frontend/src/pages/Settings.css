@@ -266,6 +266,49 @@
   background: rgba(59, 130, 246, 0.06);
 }
 
+.scenario-overview {
+  margin: 0 20px 22px;
+  padding: 16px;
+  border: 1px solid rgba(120, 183, 242, 0.24);
+  border-radius: 14px;
+  background: rgba(3, 11, 22, 0.34);
+}
+
+.scenario-overview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.scenario-overview-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scenario-overview-header strong { color: var(--text-primary); }
+.scenario-overview-header span { color: var(--text-secondary); font-size: 12px; }
+.scenario-overview-header code { color: #78b7f2; font-weight: 700; }
+
+.scenario-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scenario-overview-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.scenario-overview-grid > .is-wide { grid-column: span 3; }
+.scenario-overview-grid span { display: block; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.scenario-overview-grid strong { display: block; margin-top: 6px; color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+
 .scenario-admin-divider {
   margin-top: 8px;
   padding: 18px 20px 0;
