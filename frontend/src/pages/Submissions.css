@@ -449,6 +449,11 @@
   border-color: rgba(120, 183, 242, 0.46);
 }
 
+.manual-input-wrapper input:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .manual-input-suffix {
   position: absolute;
   top: 50%;

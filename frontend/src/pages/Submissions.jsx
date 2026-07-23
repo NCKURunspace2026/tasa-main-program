@@ -518,17 +518,16 @@ function ManualSubmission({
                 }
               />
 
-              {index < burns.length - 1 ? (
-                <NumericField
-                  label="Time to next burn"
-                  value={burn.coastTime}
-                  placeholder="0.00"
-                  suffix="s"
-                  onChange={(value) =>
-                    onBurnChange(burn.id, "coastTime", value)
-                  }
-                />
-              ) : null}
+              <NumericField
+                label="Time to next burn"
+                value={index < burns.length - 1 ? burn.coastTime : ""}
+                placeholder={index < burns.length - 1 ? "0.00" : "Use final coast time"}
+                suffix="s"
+                disabled={index === burns.length - 1}
+                onChange={(value) =>
+                  onBurnChange(burn.id, "coastTime", value)
+                }
+              />
             </div>
           </section>
         ))}
@@ -630,6 +629,7 @@ function NumericField({
   placeholder,
   suffix,
   allowNegative = false,
+  disabled = false,
   onChange,
 }) {
   function handleChange(event) {
@@ -664,6 +664,7 @@ function NumericField({
           placeholder={placeholder}
           required
           autoComplete="off"
+          disabled={disabled}
           onChange={handleChange}
         />
 
