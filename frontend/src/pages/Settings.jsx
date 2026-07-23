@@ -617,9 +617,6 @@ export default function Settings() {
   }
 
   function removeScenario(scenario) {
-    if (!window.confirm(
-      `Remove ${scenario.scenarioId} from active Scenario lists? Its Scenario definition and Solutions remain archived for export and synchronization.`,
-    )) return;
     setScenarioRemoval(scenario);
     setScenarioRemovalPassword("");
   }
@@ -1010,10 +1007,38 @@ export default function Settings() {
               <div className="scenario-admin-list">
                 {scenarios.map((scenario) => (
                   <article key={scenario.scenarioId}>
-                    <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
-                    <button className="solution-remove-button" type="button" onClick={() => removeScenario(scenario)}>
-                      Remove
-                    </button>
+                    <div className="scenario-admin-list-row">
+                      <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
+                      <button className="solution-remove-button" type="button" onClick={() => removeScenario(scenario)}>
+                        Remove
+                      </button>
+                    </div>
+                    {scenarioRemoval?.scenarioId === scenario.scenarioId ? (
+                      <form className="scenario-remove-inline" onSubmit={confirmRemoveScenario}>
+                        <p>Enter the device administration password. The Scenario is removed from active lists, but archived for export and synchronization.</p>
+                        <input
+                          type="password"
+                          autoComplete="current-password"
+                          value={scenarioRemovalPassword}
+                          onChange={(event) => setScenarioRemovalPassword(event.target.value)}
+                          placeholder="Administration password"
+                          required
+                        />
+                        <div>
+                          <button
+                            className="settings-secondary-button"
+                            type="button"
+                            onClick={() => { setScenarioRemoval(null); setScenarioRemovalPassword(""); }}
+                            disabled={isRemovingScenario}
+                          >
+                            Cancel
+                          </button>
+                          <button className="solution-remove-button" type="submit" disabled={isRemovingScenario}>
+                            {isRemovingScenario ? "Removing…" : "Confirm Remove"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -1038,41 +1063,6 @@ export default function Settings() {
           {message ? <p className="settings-message">{message}</p> : null}
         </main>
       </div>
-      {scenarioRemoval ? (
-        <div className="settings-dialog-backdrop" role="presentation">
-          <form
-            className="settings-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="remove-scenario-title"
-            onSubmit={confirmRemoveScenario}
-          >
-            <p className="submission-panel-eyebrow">Protected action</p>
-            <h2 id="remove-scenario-title">Enter administration password</h2>
-            <p>Remove {scenarioRemoval.scenarioId} from active Scenario lists. Existing data remains archived.</p>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={scenarioRemovalPassword}
-              onChange={(event) => setScenarioRemovalPassword(event.target.value)}
-              autoFocus
-              required
-            />
-            <div className="settings-dialog-actions">
-              <button
-                type="button"
-                onClick={() => { setScenarioRemoval(null); setScenarioRemovalPassword(""); }}
-                disabled={isRemovingScenario}
-              >
-                Cancel
-              </button>
-              <button className="solution-remove-button" type="submit" disabled={isRemovingScenario}>
-                {isRemovingScenario ? "Removing…" : "Confirm Remove"}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
     </section>
   );
 }

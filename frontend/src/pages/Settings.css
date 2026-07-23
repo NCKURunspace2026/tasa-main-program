@@ -373,13 +373,16 @@
 .scenario-admin-list article {
   padding: 13px 20px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.scenario-admin-list-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
-.scenario-admin-list article > div {
+.scenario-admin-list-row > div {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -399,6 +402,38 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.scenario-remove-inline {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: 12px;
+  background: rgba(127, 29, 29, 0.08);
+}
+
+.scenario-remove-inline p {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scenario-remove-inline input {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(3, 11, 22, 0.3);
+  color: var(--text-primary);
+}
+
+.scenario-remove-inline > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .settings-dialog-backdrop {
