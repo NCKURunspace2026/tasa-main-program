@@ -408,3 +408,77 @@
   font-size: 13px;
   line-height: 1.6;
 }
+
+.settings-section-note a {
+  color: #78b7f2;
+}
+
+.sync-startup-status,
+.gmat-script-preview {
+  margin: 16px 20px;
+  padding: 14px;
+  border: 1px solid rgba(120, 183, 242, 0.2);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.sync-startup-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sync-startup-status strong,
+.gmat-script-preview strong {
+  color: var(--text-primary);
+}
+
+.sync-startup-status span,
+.sync-startup-status small,
+.gmat-script-preview span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sync-startup-status-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.sync-startup-status-ok {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(20, 83, 45, 0.14);
+}
+
+.gmat-script-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gmat-script-preview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gmat-script-preview pre {
+  max-height: 420px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(3, 11, 22, 0.55);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.settings-message-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+}

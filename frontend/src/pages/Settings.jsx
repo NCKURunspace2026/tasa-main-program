@@ -153,6 +153,9 @@ export default function Settings() {
   const [isSavingScenario, setIsSavingScenario] = useState(false);
   const [includeArchivedExport, setIncludeArchivedExport] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
+  const [startupSyncStatus, setStartupSyncStatus] = useState(null);
+  const [scriptPreview, setScriptPreview] = useState("");
+  const [scriptPreviewError, setScriptPreviewError] = useState("");
   const [passwordForm, setPasswordForm] = useState({
     configured: false,
     currentPassword: "",
@@ -208,6 +211,20 @@ export default function Settings() {
       .catch(() => {});
     const unsubscribe = window.missionDashboardDesktop?.onUpdateStatus?.((status) => {
       if (isCurrent) setUpdateStatus(status);
+    });
+    return () => {
+      isCurrent = false;
+      unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCurrent = true;
+    window.missionDashboardDesktop?.getStartupSyncStatus?.()
+      .then((status) => { if (isCurrent) setStartupSyncStatus(status); })
+      .catch(() => {});
+    const unsubscribe = window.missionDashboardDesktop?.onStartupSyncStatus?.((status) => {
+      if (isCurrent) setStartupSyncStatus(status);
     });
     return () => {
       isCurrent = false;
@@ -274,6 +291,35 @@ export default function Settings() {
         : `Sync complete: pushed ${result.pushed}, pulled ${result.pulled}, conflicts ${result.conflicts.length}.`);
     } catch (error) {
       setMessage(error.message);
+    }
+  }
+
+  async function previewGmatScript() {
+    const scenario = scenarios.find((item) => item.scenarioId === selectedScenarioId);
+    if (!scenario) {
+      setScriptPreviewError("Select a published Scenario first.");
+      setScriptPreview("");
+      return;
+    }
+    if (!window.missionDashboardDesktop?.generateGmatScript) {
+      setScriptPreviewError("GMAT script preview is available in the Electron app only.");
+      setScriptPreview("");
+      return;
+    }
+    try {
+      const script = await window.missionDashboardDesktop.generateGmatScript({
+        scenario,
+        finalDecisionVariables: {
+          tWait: 0,
+          burns: [],
+          finalCoastTime: 60,
+        },
+      });
+      setScriptPreview(script);
+      setScriptPreviewError("");
+    } catch (error) {
+      setScriptPreview("");
+      setScriptPreviewError(error.message);
     }
   }
 
@@ -549,6 +595,16 @@ export default function Settings() {
               <p className="settings-section-note">
                 When enabled, this device synchronizes every 60 seconds and immediately after a locally validated Solution is saved.
               </p>
+              <div className={`sync-startup-status sync-startup-status-${startupSyncStatus?.state ?? "pending"}`}>
+                <strong>Startup sync check</strong>
+                <span>{startupSyncStatus?.message ?? "Waiting for desktop sync status..."}</span>
+                {startupSyncStatus?.checkedAt ? <small>{new Date(startupSyncStatus.checkedAt).toLocaleString()}</small> : null}
+              </div>
+              {startupSyncStatus?.state === "error" ? (
+                <p className="settings-section-note">
+                  Try Test Relay, Sync Now, or update the relay address. If the error persists, report it at <a href="https://github.com/HSL-WHU/tasa-main-program/issues" target="_blank" rel="noreferrer">GitHub Issues</a> with the message above.
+                </p>
+              ) : null}
               <div className="settings-inline-actions scenario-form-actions">
                 <button className="settings-secondary-button" type="button" onClick={testConnection}>Test Relay</button>
                 <button className="settings-secondary-button" type="button" onClick={syncNow}>Sync Now</button>
@@ -732,7 +788,20 @@ export default function Settings() {
                 <button className="settings-primary-button" type="submit" disabled={isSavingScenario || !selectedScenarioId}>
                   {isSavingScenario ? "Saving…" : "Save Scenario Limits"}
                 </button>
+                <button className="settings-secondary-button" type="button" onClick={previewGmatScript} disabled={!selectedScenarioId}>
+                  Preview GMAT Script
+                </button>
               </form>
+              {scriptPreviewError ? <p className="settings-message settings-message-error">{scriptPreviewError}</p> : null}
+              {scriptPreview ? (
+                <div className="gmat-script-preview">
+                  <div>
+                    <strong>Generated GMAT script</strong>
+                    <span>Preview uses tWait=0, no burns, and finalCoastTime=60 s. Save Scenario Limits first to preview changed settings.</span>
+                  </div>
+                  <pre>{scriptPreview}</pre>
+                </div>
+              ) : null}
               <div className="scenario-admin-divider"><span>Publish another Scenario</span></div>
               <div className="scenario-schema-guide">
                 <strong>Scenario JSON map</strong>

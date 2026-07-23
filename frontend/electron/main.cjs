@@ -7,6 +7,7 @@ const {
   resolveGmatInstallation,
   verifyPassword,
 } = require("./main/configStore.cjs");
+const { generateGmatScript } = require("./main/scriptGenerator.cjs");
 const { validateSubmission } = require("./main/validationService.cjs");
 const { startLocalBackend } = require("./main/localBackend.cjs");
 const { createAppUpdater } = require("./main/appUpdater.cjs");
@@ -17,6 +18,12 @@ const developmentRendererUrl = process.env.ELECTRON_RENDERER_URL || (
 let configStore = null;
 let localBackend = null;
 let activeLocalApiBaseUrl = null;
+let startupSyncStatus = {
+  state: "pending",
+  message: "Startup synchronization check has not run yet.",
+  checkedAt: null,
+  result: null,
+};
 
 function publicDeviceConfig(config) {
   const publicConfig = { ...config };
@@ -49,6 +56,44 @@ function createWindow(localApiBaseUrl) {
   } else {
     window.loadFile(path.join(__dirname, "..", "dist", "index.html"), {
       query: Object.fromEntries(runtimeParams),
+    });
+  }
+}
+
+function publishStartupSyncStatus(status) {
+  startupSyncStatus = { ...startupSyncStatus, ...status };
+  BrowserWindow.getAllWindows().forEach((window) => {
+    window.webContents.send("sync:startup-status", startupSyncStatus);
+  });
+}
+
+async function runStartupSyncCheck(localApiBaseUrl) {
+  publishStartupSyncStatus({
+    state: "running",
+    message: "Checking the data relay after application startup...",
+    checkedAt: new Date().toISOString(),
+    result: null,
+  });
+  try {
+    const response = await fetch(`${localApiBaseUrl}/sync/run`, { method: "POST" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.detail ?? `Startup sync failed (${response.status}).`);
+    publishStartupSyncStatus({
+      state: payload?.status === "error" ? "error" : "ok",
+      message: payload?.status === "disabled"
+        ? "Synchronization is disabled on this device."
+        : payload?.status === "error"
+          ? (payload.lastError ?? "Startup synchronization reported an error.")
+          : `Startup sync check complete: pushed ${payload.pushed ?? 0}, pulled ${payload.pulled ?? 0}, conflicts ${payload.conflicts?.length ?? 0}.`,
+      checkedAt: new Date().toISOString(),
+      result: payload,
+    });
+  } catch (error) {
+    publishStartupSyncStatus({
+      state: "error",
+      message: error.message,
+      checkedAt: new Date().toISOString(),
+      result: null,
     });
   }
 }
@@ -126,7 +171,13 @@ app.whenReady().then(async () => {
     const config = configStore.read();
     return validateSubmission({ ...request, executablePath: config.executablePath, timeoutMs: Number(config.timeoutMs ?? 120000), keepTemporaryFiles: Boolean(config.keepTemporaryFiles) });
   });
+  ipcMain.handle("gmat:generate-script", (_event, request) => generateGmatScript({
+    ...request,
+    reportPath: request.reportPath ?? path.join(app.getPath("temp"), "mission-dashboard-preview-report.txt"),
+  }));
+  ipcMain.handle("sync:get-startup-status", () => startupSyncStatus);
   createWindow(localApiBaseUrl);
+  runStartupSyncCheck(localApiBaseUrl);
 }).catch((error) => {
   console.error(`[startup] ${error.stack ?? error.message}`);
   dialog.showErrorBox("Mission Dashboard could not start", error.message);

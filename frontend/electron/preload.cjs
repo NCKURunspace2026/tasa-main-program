@@ -5,7 +5,14 @@ contextBridge.exposeInMainWorld("missionDashboardDesktop", {
   selectGmatInstallation: () => ipcRenderer.invoke("gmat:select-installation"),
   saveGmatConfig: (config) => ipcRenderer.invoke("gmat:save-config", config),
   validateWithLocalGmat: (request) => ipcRenderer.invoke("gmat:validate-submission", request),
+  generateGmatScript: (request) => ipcRenderer.invoke("gmat:generate-script", request),
   localAdminRequest: (path, options) => ipcRenderer.invoke("local:admin-request", path, options),
+  getStartupSyncStatus: () => ipcRenderer.invoke("sync:get-startup-status"),
+  onStartupSyncStatus: (callback) => {
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on("sync:startup-status", listener);
+    return () => ipcRenderer.removeListener("sync:startup-status", listener);
+  },
   getAdminPasswordStatus: () => ipcRenderer.invoke("admin:password-status"),
   setAdminPassword: (request) => ipcRenderer.invoke("admin:set-password", request),
   getUpdateStatus: () => ipcRenderer.invoke("app:update:get-status"),
