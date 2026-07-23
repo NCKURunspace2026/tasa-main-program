@@ -192,9 +192,7 @@ export default function Leaderboard() {
 
   function removeSelectedSolution() {
     if (!selectedSolution || isRemoving) return;
-    if (!window.confirm(
-      `Remove ${selectedSolution.solutionId} from the Leaderboard? Its Solution and Submission data remain stored for export and Machine Learning.`,
-    )) return;
+    setDetailError("");
     setRemovePassword("");
     setShowRemovePassword(true);
   }

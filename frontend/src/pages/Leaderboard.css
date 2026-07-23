@@ -775,6 +775,24 @@
 
 .leaderboard-dialog input {
   width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 10px;
+  background: rgba(3, 11, 22, 0.72);
+  color: var(--text-primary);
+  font: inherit;
+  caret-color: #78b7f2;
+}
+
+.leaderboard-dialog input:focus {
+  border-color: rgba(120, 183, 242, 0.7);
+  outline: 2px solid rgba(120, 183, 242, 0.16);
+  outline-offset: 1px;
+}
+
+.leaderboard-dialog input::selection {
+  background: rgba(120, 183, 242, 0.35);
 }
 
 .leaderboard-dialog .leaderboard-dialog-error {
