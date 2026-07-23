@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -283,12 +284,10 @@ def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
 
 
 def _next_scenario_id(session: Session) -> str:
-    highest = 0
-    for scenario in scenario_repository.find_all(session, include_inactive=True):
-        match = re.fullmatch(r"SC-(\d+)", scenario.id)
-        if match:
-            highest = max(highest, int(match.group(1)))
-    return f"SC-{highest + 1:03d}"
+    while True:
+        scenario_id = f"SC-{uuid4().int % 1_000_000_000_000:012d}"
+        if scenario_repository.find_by_id(session, scenario_id, include_inactive=True) is None:
+            return scenario_id
 
 
 def set_scenario_inactive(session: Session, scenario_id: str) -> dict | None:

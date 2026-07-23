@@ -979,7 +979,7 @@ export default function Settings() {
                 Reset to Complete Template
               </button>
               <form className="scenario-create-form" onSubmit={publishScenario}>
-                <p className="settings-section-note">Scenario ID is assigned automatically using the next available SC number.</p>
+                <p className="settings-section-note">Scenario ID is assigned automatically using a sync-safe SC number.</p>
                 <SettingsRow label="Name">
                   <input name="name" value={scenarioForm.name} onChange={updateScenario} required />
                 </SettingsRow>

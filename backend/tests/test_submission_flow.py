@@ -1,4 +1,5 @@
 import math
+import re
 
 from fastapi.testclient import TestClient
 
@@ -123,7 +124,7 @@ def test_scenario_publish_normalizes_force_model_and_physical_properties():
             "scenarioJson": definition,
         })
         assert created.status_code == 201
-        assert created.json()["scenarioId"] == "SC-002"
+        assert re.fullmatch(r"SC-\d{12}", created.json()["scenarioId"])
         saved = created.json()["scenarioJson"]
         assert saved["forceModel"]["gravity"]["degree"] == 4
         assert saved["forceModel"]["pointMasses"] == ["Sun", "Luna"]
