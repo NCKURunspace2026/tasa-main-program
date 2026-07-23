@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 
-function parseGmatReport(reportPath) {
+function parseGmatReport(reportPath, { requiredDistanceKm } = {}) {
   const rows = fs.readFileSync(reportPath, "utf8")
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -16,10 +16,15 @@ function parseGmatReport(reportPath) {
   ));
   const minimumDistanceKm = Math.min(...distances);
   const minimumIndex = distances.indexOf(minimumDistanceKm);
+  const firstRequiredIndex = Number.isFinite(requiredDistanceKm)
+    ? distances.findIndex((distance) => distance <= requiredDistanceKm)
+    : -1;
   const finalState = rows.at(-1).state;
   return {
     minimumDistanceKm,
     minimumDistanceTimeSec: rows[minimumIndex].timeSec,
+    firstRequiredDistanceKm: firstRequiredIndex >= 0 ? distances[firstRequiredIndex] : null,
+    firstRequiredDistanceTimeSec: firstRequiredIndex >= 0 ? rows[firstRequiredIndex].timeSec : null,
     finalDistanceKm: distances.at(-1),
     finalChaserPositionKm: finalState.slice(0, 3),
     finalTargetPositionKm: finalState.slice(3, 6),

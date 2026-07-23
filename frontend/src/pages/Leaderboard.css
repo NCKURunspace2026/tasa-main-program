@@ -175,6 +175,21 @@
 
 .solution-remove-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.solution-repair-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 8px;
+  background: rgba(96, 165, 250, 0.08);
+  color: #93c5fd;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.solution-repair-button:disabled { opacity: 0.55; cursor: not-allowed; }
+
 .solution-detail-content {
   padding-top: 18px;
 }

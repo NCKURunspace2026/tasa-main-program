@@ -29,9 +29,10 @@ def calculate_score(
     if values["distanceDecayKm"] <= 0:
         raise InvalidScoreConfigError("distanceDecayKm must be greater than zero.")
 
-    scored_distance = max(minimum_distance_km, values["distanceReferenceKm"])
-    distance_score = values["distanceWeight"] * math.exp(
-        -(scored_distance - values["distanceReferenceKm"]) / values["distanceDecayKm"]
+    distance_score = (
+        values["distanceWeight"]
+        if minimum_distance_km <= values["distanceReferenceKm"]
+        else 0.0
     )
     time_score = values["timeWeight"] / (
         1 + math.exp(_clamp_exponent(

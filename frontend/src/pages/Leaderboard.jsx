@@ -4,7 +4,7 @@ import "./Leaderboard.css";
 
 import PageHeader from "../components/PageHeader.jsx";
 import useScenarios from "../hooks/useScenarios.js";
-import { deleteSolution, getLeaderboard, getSolutionDetail, runDataSync } from "../services/api.js";
+import { deleteSolution, getLeaderboard, getSolutionDetail, revalidateSolution, runDataSync } from "../services/api.js";
 
 import { Table, pixel } from "@astryxdesign/core/Table";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
@@ -37,6 +37,7 @@ export default function Leaderboard() {
   const [detailError, setDetailError] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   const [showRemovePassword, setShowRemovePassword] = useState(false);
   const [removePassword, setRemovePassword] = useState("");
   const removePasswordRef = useRef(null);
@@ -163,15 +164,9 @@ export default function Leaderboard() {
       },
       {
         key: "minimumDistance",
-        header: "Min distance (km)",
+        header: "Closest distance (km)",
         width: pixel(135),
         renderCell: (item) => item.minimumDistance.toFixed(4),
-      },
-      {
-        key: "minimumDistanceTime",
-        header: "Min time (s)",
-        width: pixel(125),
-        renderCell: (item) => formatOptionalSeconds(item.minimumDistanceTime, 2),
       },
       {
         key: "totalDeltaV",
@@ -234,6 +229,46 @@ export default function Leaderboard() {
     }
   }
 
+  async function repairSelectedSolution() {
+    if (!selectedSolution || isRepairing) return;
+    setIsRepairing(true);
+    setDetailError("");
+    try {
+      const scenario = scenarioOptions.find((item) => item.id === selectedSolution.scenarioId);
+      if (!window.missionDashboardDesktop?.validateWithLocalGmat) {
+        throw new Error("Repair requires the Electron Client app with local GMAT configured.");
+      }
+      if (!scenario?.scenarioJson || Object.keys(scenario.scenarioJson).length === 0) {
+        throw new Error("The selected Scenario has no simulation definition.");
+      }
+      const localResult = await window.missionDashboardDesktop.validateWithLocalGmat({
+        scenario,
+        finalDecisionVariables: selectedSolution.finalDecisionVariables,
+      });
+      if (localResult.status !== "validated") {
+        throw new Error("Local GMAT repair did not pass validation.");
+      }
+      const repaired = await revalidateSolution(selectedSolution.solutionId, {
+        decisionVariables: localResult.adjustedDecisionVariables ?? selectedSolution.finalDecisionVariables,
+        clientValidation: {
+          passed: true,
+          provider: localResult.provider,
+          minimumDistanceKm: localResult.minimumDistance,
+          minimumDistanceTimeSec: localResult.firstRequiredDistanceTime,
+          missionTimeSec: localResult.totalTime,
+          totalDeltaVKmPerSec: localResult.totalDeltaV,
+        },
+      });
+      setSelectedSolution(repaired);
+      setRefreshVersion((value) => value + 1);
+      runDataSync().catch(() => {});
+    } catch (requestError) {
+      setDetailError(requestError.message);
+    } finally {
+      setIsRepairing(false);
+    }
+  }
+
   return (
     <section className="leaderboard-page">
       <PageHeader
@@ -288,6 +323,9 @@ export default function Leaderboard() {
           {selectedSolution ? (
             <div className="solution-detail-actions">
               <span className="solution-detail-status">Validated</span>
+              <button className="solution-repair-button" type="button" onClick={repairSelectedSolution} disabled={isRepairing || isRemoving}>
+                {isRepairing ? "Repairing..." : "Repair GMAT metrics"}
+              </button>
               <button className="solution-remove-button" type="button" onClick={removeSelectedSolution} disabled={isRemoving}>
                 {isRemoving ? "Removing…" : "Remove"}
               </button>
@@ -373,8 +411,8 @@ function SolutionDetailTab({ tab, detail }) {
           <MetadataList>
             <MetadataListItem label="Local rank">{detail.officialResults.rank ?? "—"}</MetadataListItem>
             <MetadataListItem label="Local score"><strong className="official-score-value">{detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
-            <MetadataListItem label="Minimum distance">{detail.officialResults.minimumDistance.toFixed(4)} km</MetadataListItem>
-            <MetadataListItem label="Time at minimum distance">{formatOptionalSeconds(detail.officialResults.minimumDistanceTime, 6)}</MetadataListItem>
+            <MetadataListItem label="Closest distance">{detail.officialResults.minimumDistance.toFixed(4)} km</MetadataListItem>
+            <MetadataListItem label="Completion time">{detail.officialResults.totalTime.toFixed(6)} s</MetadataListItem>
             <MetadataListItem label="Total Delta-V">{detail.officialResults.totalDeltaV.toFixed(4)} km/s</MetadataListItem>
             <MetadataListItem label="Total time">{detail.officialResults.totalTime.toFixed(2)} s</MetadataListItem>
             <MetadataListItem label="Burn count">{detail.officialResults.burnCount}</MetadataListItem>
@@ -408,10 +446,4 @@ function DecisionVariables({ variables, title }) {
 
 function DetailCard({ title, children }) {
   return <section className="solution-detail-card"><h3>{title}</h3>{children}</section>;
-}
-
-function formatOptionalSeconds(value, digits) {
-  if (value == null || value === "") return "Not reported";
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? `${numericValue.toFixed(digits)} s` : "Not reported";
 }

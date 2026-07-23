@@ -295,7 +295,7 @@ export default function Submissions({ onNavigate }) {
           passed: true,
           provider: localResult.provider,
           minimumDistanceKm: localResult.minimumDistance,
-          minimumDistanceTimeSec: localResult.minimumDistanceTime,
+          minimumDistanceTimeSec: localResult.firstRequiredDistanceTime,
           missionTimeSec: localResult.totalTime,
           totalDeltaVKmPerSec: localResult.totalDeltaV,
         },
@@ -314,7 +314,7 @@ export default function Submissions({ onNavigate }) {
         executionEvidence,
         validationMetrics: {
           minimumDistanceKm: localResult.minimumDistance,
-          minimumDistanceTimeSec: localResult.minimumDistanceTime,
+          firstRequiredDistanceTimeSec: localResult.firstRequiredDistanceTime,
           finalDistanceKm: localResult.finalDistance,
           totalTimeSec: localResult.totalTime,
           totalDeltaVKmPerSec: localResult.totalDeltaV,
@@ -923,11 +923,11 @@ function ValidationPanel({
           </div>
         ) : null}
 
-        {validationState.validationMetrics ? (
+        {validationState.validationMetrics?.firstRequiredDistanceTimeSec != null ? (
           <div>
-            <span>Time at minimum distance</span>
+            <span>Completion time</span>
             <strong>
-              {formatOptionalSeconds(validationState.validationMetrics.minimumDistanceTimeSec)}
+              {formatOptionalSeconds(validationState.validationMetrics.firstRequiredDistanceTimeSec)}
             </strong>
           </div>
         ) : null}

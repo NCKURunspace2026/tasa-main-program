@@ -105,6 +105,13 @@ export function getSolutionDetail(solutionId) {
   return request(`/solutions/${solutionId}`);
 }
 
+export function revalidateSolution(solutionId, payload) {
+  return request(`/solutions/${solutionId}/revalidate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getScenarios() {
   return request("/scenarios");
 }

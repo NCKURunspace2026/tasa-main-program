@@ -11,7 +11,9 @@ from ..db import get_db
 from ..services.solution_query_service import (
     get_solution_detail,
     set_solution_deleted,
+    update_solution_validation,
 )
+from ..schemas.submission import SolutionRevalidationInput
 
 router = APIRouter(prefix="/api/solutions", tags=["solutions"])
 
@@ -38,6 +40,21 @@ def read_solution(
 @router.delete("/{solution_id}", dependencies=[Depends(require_admin_token)])
 def delete_solution(solution_id: str, session: Session = Depends(get_db)):
     result = set_solution_deleted(session, solution_id, True)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Solution not found.")
+    return result
+
+
+@router.post("/{solution_id}/revalidate")
+def revalidate_solution(
+    solution_id: str,
+    payload: SolutionRevalidationInput,
+    session: Session = Depends(get_db),
+):
+    try:
+        result = update_solution_validation(session, solution_id, payload)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     if result is None:
         raise HTTPException(status_code=404, detail="Solution not found.")
     return result

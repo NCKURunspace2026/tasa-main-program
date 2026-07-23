@@ -71,3 +71,8 @@ class SubmissionInput(StrictModel):
     scenarioId: str = Field(pattern=r"^SC-\d{3,}$")
     solution: SolutionInput
     clientValidation: ClientValidationInput
+
+
+class SolutionRevalidationInput(StrictModel):
+    decisionVariables: DecisionVariablesInput
+    clientValidation: ClientValidationInput

@@ -3,7 +3,7 @@
   "description": "Local-first orbital mission dashboard with SQLite replication and GMAT.",
   "author": "NCKU Runspace 2026",
   "private": true,
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {

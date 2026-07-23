@@ -33,7 +33,9 @@ function runGmat({ executablePath, scenario, finalDecisionVariables, timeoutMs =
         ));
       }
       try {
-        const result = parseGmatReport(reportPath);
+        const result = parseGmatReport(reportPath, {
+          requiredDistanceKm: readRequiredDistanceKm(scenario),
+        });
         const scriptSha256 = sha256File(scriptPath);
         const reportSha256 = sha256File(reportPath);
         const execution = {
@@ -67,5 +69,14 @@ function ensureGmatOutputDirectory(executablePath) {
 
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function readRequiredDistanceKm(scenario) {
+  const definition = scenario?.scenarioJson ?? scenario?.definition ?? {};
+  const limits = definition.validation ?? definition.constraints ?? {};
+  return limits.requiredFinalDistanceKm
+    ?? limits.interceptionDistance
+    ?? limits.finalDistanceThreshold
+    ?? limits.maximumFinalDistance;
 }
 module.exports = { ensureGmatOutputDirectory, runGmat };

@@ -1,9 +1,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { trimFinalCoastToMinimumDistance } = require("./validationService.cjs");
+const { trimFinalCoastToCompletionTime } = require("./validationService.cjs");
 
-test("trims final coast to the minimum-distance time", () => {
+test("trims final coast to the completion time", () => {
   const decisionVariables = {
     tWait: 10,
     burns: [
@@ -13,14 +13,14 @@ test("trims final coast to the minimum-distance time", () => {
     finalCoastTime: 500,
   };
 
-  const result = trimFinalCoastToMinimumDistance(decisionVariables, 250);
+  const result = trimFinalCoastToCompletionTime(decisionVariables, 250);
 
   assert.equal(result.decisionVariables.finalCoastTime, 140);
   assert.equal(result.adjustment.originalTotalTime, 610);
   assert.equal(result.adjustment.adjustedTotalTime, 250);
 });
 
-test("does not trim when minimum distance occurred before final coast", () => {
+test("does not trim when completion occurred before final coast", () => {
   const decisionVariables = {
     tWait: 10,
     burns: [
@@ -30,7 +30,7 @@ test("does not trim when minimum distance occurred before final coast", () => {
     finalCoastTime: 500,
   };
 
-  const result = trimFinalCoastToMinimumDistance(decisionVariables, 50);
+  const result = trimFinalCoastToCompletionTime(decisionVariables, 50);
 
   assert.equal(result.decisionVariables, decisionVariables);
   assert.equal(result.adjustment, null);

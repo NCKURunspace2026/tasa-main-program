@@ -6,19 +6,19 @@ function totalMissionTime(finalDecisionVariables) {
   return finalDecisionVariables.tWait + finalDecisionVariables.finalCoastTime + finalDecisionVariables.burns.reduce((sum, burn) => sum + (burn.timeToNextBurn ?? 0), 0);
 }
 
-function trimFinalCoastToMinimumDistance(finalDecisionVariables, minimumDistanceTimeSec) {
-  if (!Number.isFinite(minimumDistanceTimeSec)) {
+function trimFinalCoastToCompletionTime(finalDecisionVariables, completionTimeSec) {
+  if (!Number.isFinite(completionTimeSec)) {
     return { decisionVariables: finalDecisionVariables, adjustment: null };
   }
 
   const finalCoastStartTime = finalDecisionVariables.tWait + finalDecisionVariables.burns.reduce((sum, burn) => sum + (burn.timeToNextBurn ?? 0), 0);
   const originalTotalTime = totalMissionTime(finalDecisionVariables);
   const toleranceSec = 1e-6;
-  if (minimumDistanceTimeSec < finalCoastStartTime - toleranceSec || minimumDistanceTimeSec >= originalTotalTime - toleranceSec) {
+  if (completionTimeSec < finalCoastStartTime - toleranceSec || completionTimeSec >= originalTotalTime - toleranceSec) {
     return { decisionVariables: finalDecisionVariables, adjustment: null };
   }
 
-  const adjustedFinalCoastTime = Math.max(0, minimumDistanceTimeSec - finalCoastStartTime);
+  const adjustedFinalCoastTime = Math.max(0, completionTimeSec - finalCoastStartTime);
   return {
     decisionVariables: {
       ...finalDecisionVariables,
@@ -30,14 +30,15 @@ function trimFinalCoastToMinimumDistance(finalDecisionVariables, minimumDistance
       adjustedFinalCoastTime,
       originalTotalTime,
       adjustedTotalTime: finalCoastStartTime + adjustedFinalCoastTime,
-      minimumDistanceTimeSec,
+      completionTimeSec,
     },
   };
 }
 
 async function validateSubmission({ executablePath, scenario, finalDecisionVariables, timeoutMs, keepTemporaryFiles }) {
   const propagation = await runGmat({ executablePath, scenario, finalDecisionVariables, timeoutMs, keepTemporaryFiles });
-  const { decisionVariables: scoredDecisionVariables, adjustment } = trimFinalCoastToMinimumDistance(finalDecisionVariables, propagation.minimumDistanceTimeSec);
+  const completionTimeSec = propagation.firstRequiredDistanceTimeSec ?? propagation.minimumDistanceTimeSec;
+  const { decisionVariables: scoredDecisionVariables, adjustment } = trimFinalCoastToCompletionTime(finalDecisionVariables, completionTimeSec);
   const totalDeltaV = scoredDecisionVariables.burns.reduce((sum, burn) => sum + magnitude(burn.deltaV), 0);
   const totalTime = totalMissionTime(scoredDecisionVariables);
   const definition = scenario.scenarioJson ?? scenario.definition ?? {};
@@ -95,6 +96,6 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
       });
     });
   }
-  return { provider: "gmat-console", status: constraints.every((item) => item.satisfied) ? "validated" : "failed", minimumDistance: propagation.minimumDistanceKm, minimumDistanceTime: propagation.minimumDistanceTimeSec, finalDistance: propagation.finalDistanceKm, totalDeltaV, totalTime, burnCount: scoredDecisionVariables.burns.length, constraints, adjustedDecisionVariables: scoredDecisionVariables, adjustment, artifacts: propagation };
+  return { provider: "gmat-console", status: constraints.every((item) => item.satisfied) ? "validated" : "failed", minimumDistance: propagation.minimumDistanceKm, minimumDistanceTime: propagation.minimumDistanceTimeSec, firstRequiredDistance: propagation.firstRequiredDistanceKm, firstRequiredDistanceTime: propagation.firstRequiredDistanceTimeSec, finalDistance: propagation.finalDistanceKm, totalDeltaV, totalTime, burnCount: scoredDecisionVariables.burns.length, constraints, adjustedDecisionVariables: scoredDecisionVariables, adjustment, artifacts: propagation };
 }
-module.exports = { trimFinalCoastToMinimumDistance, validateSubmission };
+module.exports = { trimFinalCoastToCompletionTime, validateSubmission };

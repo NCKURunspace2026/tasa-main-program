@@ -144,6 +144,36 @@ def test_delta_v_limit_rejects_single_burn_above_limit():
         assert "per-burn" in response.json()["detail"]
 
 
+def test_existing_solution_revalidation_updates_minimum_distance_time_and_decision_variables():
+    payload = submission_payload()
+    payload["clientValidation"]["minimumDistanceTimeSec"] = None
+    with TestClient(app) as client:
+        created = client.post("/api/submissions", json=payload)
+        assert created.status_code == 201
+        solution_id = created.json()["solutionId"]
+
+        repaired_decision = payload["solution"]["decisionVariables"] | {"finalCoastTime": 4800}
+        repaired = client.post(f"/api/solutions/{solution_id}/revalidate", json={
+            "decisionVariables": repaired_decision,
+            "clientValidation": {
+                "passed": True,
+                "provider": "local-gmat-console",
+                "minimumDistanceKm": 4.2,
+                "minimumDistanceTimeSec": 4800,
+                "missionTimeSec": 4800,
+                "totalDeltaVKmPerSec": payload["clientValidation"]["totalDeltaVKmPerSec"],
+            },
+        })
+        assert repaired.status_code == 200
+        detail = repaired.json()
+        assert detail["solutionId"] == solution_id
+        assert detail["finalDecisionVariables"]["finalCoastTime"] == 4800
+        assert detail["officialResults"]["minimumDistance"] == 4.2
+        assert detail["officialResults"]["minimumDistanceTime"] == 4800
+        leaderboard = client.get("/api/scenarios/SC-001/leaderboard").json()
+        assert leaderboard["items"][0]["minimumDistanceTime"] == 4800
+
+
 def test_scenario_publish_normalizes_force_model_and_physical_properties():
     definition = scenario_json()
     definition["forceModel"] = {
