@@ -193,7 +193,7 @@ function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
     `GMAT Prop.MinStep = ${minStep};`,
     `GMAT Prop.Accuracy = ${accuracy};`,
     "Create ReportFile ValidationReport;", `GMAT ValidationReport.Filename = '${reportPath.replaceAll("\\", "/")}';`,
-    `GMAT ValidationReport.Add = {${chaserName}.X, ${chaserName}.Y, ${chaserName}.Z, ${targetName}.X, ${targetName}.Y, ${targetName}.Z};`,
+    `GMAT ValidationReport.Add = {${chaserName}.ElapsedSecs, ${chaserName}.X, ${chaserName}.Y, ${chaserName}.Z, ${targetName}.X, ${targetName}.Y, ${targetName}.Z};`,
     ...burnDefinitions,
     "BeginMissionSequence;",
   ];
@@ -205,7 +205,7 @@ function generateGmatScript({ scenario, finalDecisionVariables, reportPath }) {
   });
   lines.push(
     `Propagate Prop(${chaserName}, ${targetName}) {${chaserName}.ElapsedSecs = ${finalDecisionVariables.finalCoastTime}};`,
-    `Report ValidationReport ${chaserName}.X ${chaserName}.Y ${chaserName}.Z ${targetName}.X ${targetName}.Y ${targetName}.Z;`,
+    `Report ValidationReport ${chaserName}.ElapsedSecs ${chaserName}.X ${chaserName}.Y ${chaserName}.Z ${targetName}.X ${targetName}.Y ${targetName}.Z;`,
   );
   return `${lines.join("\n")}\n`;
 }

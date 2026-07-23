@@ -8,7 +8,7 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
   const totalTime = finalDecisionVariables.tWait + finalDecisionVariables.finalCoastTime + finalDecisionVariables.burns.reduce((sum, burn) => sum + (burn.timeToNextBurn ?? 0), 0);
   const definition = scenario.scenarioJson ?? scenario.definition ?? {};
   const limits = definition.validation ?? definition.constraints ?? {};
-  const finalDistanceLimit = limits.requiredFinalDistanceKm ?? limits.interceptionDistance ?? limits.finalDistanceThreshold ?? limits.maximumFinalDistance;
+  const distanceLimit = limits.requiredFinalDistanceKm ?? limits.interceptionDistance ?? limits.finalDistanceThreshold ?? limits.maximumFinalDistance;
   const deltaVPerBurnLimit = limits.maximumDeltaVPerBurn ?? limits.maximumTotalDeltaV;
   const timeLimit = limits.maximumSimulationTimeSec
     ?? limits.maximumMissionTimeSec
@@ -17,7 +17,7 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
   const maximumBurnCount = limits.maximumBurnCount;
   const minimumBurnSeparation = limits.minimumBurnSeparationSec;
   const constraints = [
-    ["minimumDistance", propagation.minimumDistanceKm, finalDistanceLimit],
+    ["minimumDistance", propagation.minimumDistanceKm, distanceLimit],
     ["totalTime", totalTime, timeLimit],
   ].filter(([, , limit]) => Number.isFinite(limit)).map(([name, value, limit]) => ({ name, value, limit, operator: "<=", satisfied: value <= limit }));
   if (Number.isFinite(deltaVPerBurnLimit)) {
@@ -61,6 +61,6 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
       });
     });
   }
-  return { provider: "gmat-console", status: constraints.every((item) => item.satisfied) ? "validated" : "failed", minimumDistance: propagation.minimumDistanceKm, finalDistance: propagation.finalDistanceKm, totalDeltaV, totalTime, burnCount: finalDecisionVariables.burns.length, constraints, artifacts: propagation };
+  return { provider: "gmat-console", status: constraints.every((item) => item.satisfied) ? "validated" : "failed", minimumDistance: propagation.minimumDistanceKm, minimumDistanceTime: propagation.minimumDistanceTimeSec, finalDistance: propagation.finalDistanceKm, totalDeltaV, totalTime, burnCount: finalDecisionVariables.burns.length, constraints, artifacts: propagation };
 }
 module.exports = { validateSubmission };

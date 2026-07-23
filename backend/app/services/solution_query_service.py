@@ -46,7 +46,8 @@ def get_solution_detail(
         "officialResults": {
             "rank": rank,
             "officialScore": submission.total_score,
-            "finalDistance": submission.server_min_distance_km,
+            "minimumDistance": submission.server_min_distance_km,
+            "minimumDistanceTime": submission.server_min_distance_time_sec,
             "totalDeltaV": submission.total_delta_v_kmps,
             "totalTime": submission.mission_time_sec,
             "burnCount": len(solution.decision_variables_json.get("burns", [])),

@@ -65,6 +65,7 @@ def submission_payload():
             "passed": True,
             "provider": "local-gmat-console",
             "minimumDistanceKm": 4.8,
+            "minimumDistanceTimeSec": 1234.5,
             "missionTimeSec": 5000,
             "totalDeltaVKmPerSec": math.hypot(*delta_v),
         },
@@ -87,12 +88,21 @@ def test_local_gmat_result_is_scored_saved_and_ranked_without_second_worker():
         result = response.json()
         assert result["status"] == "passed"
         assert result["officialResults"]["totalScore"] > 0
+        assert result["officialResults"]["minimumDistanceTimeSec"] == 1234.5
 
         saved = client.get(f"/api/submissions/{result['submissionId']}").json()
         assert saved["status"] == "passed"
+        assert saved["officialResults"]["minimumDistanceTimeSec"] == 1234.5
         leaderboard = client.get("/api/scenarios/SC-001/leaderboard").json()
         assert leaderboard["total"] == 1
         assert leaderboard["items"][0]["solutionId"] == result["solutionId"]
+        assert leaderboard["items"][0]["minimumDistance"] == 4.8
+        assert leaderboard["items"][0]["minimumDistanceTime"] == 1234.5
+        assert "finalDistance" not in leaderboard["items"][0]
+        detail = client.get(f"/api/solutions/{result['solutionId']}").json()
+        assert detail["officialResults"]["minimumDistance"] == 4.8
+        assert detail["officialResults"]["minimumDistanceTime"] == 1234.5
+        assert "finalDistance" not in detail["officialResults"]
 
 
 def test_unvalidated_or_inconsistent_client_result_is_rejected():

@@ -84,6 +84,7 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         client_validation_json=payload.clientValidation.model_dump(mode="json"),
         status="passed",
         server_min_distance_km=payload.clientValidation.minimumDistanceKm,
+        server_min_distance_time_sec=payload.clientValidation.minimumDistanceTimeSec,
         mission_time_sec=payload.clientValidation.missionTimeSec,
         total_delta_v_kmps=payload.clientValidation.totalDeltaVKmPerSec,
         distance_score=scores["distanceScore"],
@@ -110,6 +111,7 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         "message": "Local GMAT validation passed and the scored Solution was saved on this device.",
         "officialResults": {
             "minimumDistanceKm": submission.server_min_distance_km,
+            "minimumDistanceTimeSec": submission.server_min_distance_time_sec,
             "missionTimeSec": submission.mission_time_sec,
             "totalDeltaVKmPerSec": submission.total_delta_v_kmps,
             "distanceScore": submission.distance_score,
@@ -131,6 +133,7 @@ def get_submission(session: Session, submission_id: str) -> dict | None:
         "status": submission.status,
         "officialResults": {
             "minimumDistanceKm": submission.server_min_distance_km,
+            "minimumDistanceTimeSec": submission.server_min_distance_time_sec,
             "missionTimeSec": submission.mission_time_sec,
             "totalDeltaVKmPerSec": submission.total_delta_v_kmps,
             "distanceScore": submission.distance_score,

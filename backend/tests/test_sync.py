@@ -104,6 +104,7 @@ def test_device_pushes_only_changes_after_the_first_successful_sync():
         record = find_record(relay, "solution", solution_id)
         assert record is not None
         assert record["payload"]["deletedAt"] is not None
+        assert record["payload"]["submission"]["serverMinimumDistanceTimeSec"] == 1234.5
 
 
 def test_scenario_delete_emits_sync_event_for_incremental_peers():
@@ -197,6 +198,7 @@ def test_passed_solution_can_rebuild_an_empty_replica_and_recomputes_score(tmp_p
         assert replica.get(Solution, solution_id) is not None
         submission = replica.scalar(select(Submission).where(Submission.solution_id == solution_id))
         assert submission.status == "passed"
+        assert submission.server_min_distance_time_sec == 1234.5
         assert submission.total_score is not None
         rebuilt = find_record(replica, "solution", solution_id)
         source = next(record for record in records if record["recordId"] == solution_id)

@@ -58,6 +58,7 @@ const initialValidationState = {
   submissionId: null,
   solutionId: null,
   executionEvidence: null,
+  validationMetrics: null,
 };
 
 function isValidNumber(value) {
@@ -289,6 +290,7 @@ export default function Submissions({ onNavigate }) {
           passed: true,
           provider: localResult.provider,
           minimumDistanceKm: localResult.minimumDistance,
+          minimumDistanceTimeSec: localResult.minimumDistanceTime,
           missionTimeSec: localResult.totalTime,
           totalDeltaVKmPerSec: localResult.totalDeltaV,
         },
@@ -305,6 +307,13 @@ export default function Submissions({ onNavigate }) {
         submissionId: result.submissionId,
         solutionId: result.solutionId,
         executionEvidence,
+        validationMetrics: {
+          minimumDistanceKm: localResult.minimumDistance,
+          minimumDistanceTimeSec: localResult.minimumDistanceTime,
+          finalDistanceKm: localResult.finalDistance,
+          totalTimeSec: localResult.totalTime,
+          totalDeltaVKmPerSec: localResult.totalDeltaV,
+        },
       });
       runDataSync().catch(() => {});
     } catch (error) {
@@ -317,6 +326,7 @@ export default function Submissions({ onNavigate }) {
         submissionId: null,
         solutionId: null,
         executionEvidence: null,
+        validationMetrics: null,
       });
     }
   }
@@ -898,6 +908,24 @@ function ValidationPanel({
           </div>
         ) : null}
 
+        {validationState.validationMetrics ? (
+          <div>
+            <span>Minimum distance</span>
+            <strong>
+              {validationState.validationMetrics.minimumDistanceKm.toFixed(6)} km
+            </strong>
+          </div>
+        ) : null}
+
+        {validationState.validationMetrics ? (
+          <div>
+            <span>Time at minimum distance</span>
+            <strong>
+              {formatOptionalSeconds(validationState.validationMetrics.minimumDistanceTimeSec)}
+            </strong>
+          </div>
+        ) : null}
+
         {validationState.executionEvidence ? (
           <div>
             <span>Report SHA-256</span>
@@ -962,6 +990,10 @@ function formatDateTime(date) {
       second: "2-digit",
     },
   ).format(date);
+}
+
+function formatOptionalSeconds(value) {
+  return Number.isFinite(Number(value)) ? `${Number(value).toFixed(6)} s` : "Not reported";
 }
 
 function ValidationIcon(props) {

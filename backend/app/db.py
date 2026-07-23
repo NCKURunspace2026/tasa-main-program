@@ -161,10 +161,14 @@ def _add_sync_columns_for_existing_database() -> None:
 def _add_legacy_submission_columns_for_existing_database() -> None:
     """Keep databases from older validation-worker builds insert-compatible."""
     existing = {column["name"] for column in inspect(engine).get_columns("submissions")}
-    if "attempt_count" not in existing:
-        with engine.begin() as connection:
+    with engine.begin() as connection:
+        if "attempt_count" not in existing:
             connection.execute(text(
                 "ALTER TABLE submissions ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0"
+            ))
+        if "server_min_distance_time_sec" not in existing:
+            connection.execute(text(
+                "ALTER TABLE submissions ADD COLUMN server_min_distance_time_sec FLOAT"
             ))
 
 

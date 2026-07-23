@@ -421,6 +421,7 @@ def _solution_record(solution: Solution, submission: Submission) -> dict:
             "clientValidation": submission.client_validation_json,
             "status": submission.status,
             "serverMinimumDistanceKm": submission.server_min_distance_km,
+            "serverMinimumDistanceTimeSec": submission.server_min_distance_time_sec,
             "missionTimeSec": submission.mission_time_sec,
             "totalDeltaVKmPerSec": submission.total_delta_v_kmps,
             "distanceScore": submission.distance_score,
@@ -520,6 +521,18 @@ def _import_solution(session: Session, record: dict) -> None:
         for server, client in zip(server_metrics, client_metrics)
     ):
         raise ValueError("Synchronized GMAT metrics are inconsistent.")
+    server_minimum_time = submission_payload.get("serverMinimumDistanceTimeSec")
+    if server_minimum_time is not None:
+        server_minimum_time = float(server_minimum_time)
+        if not math.isfinite(server_minimum_time):
+            raise ValueError("Synchronized minimum-distance time is invalid.")
+        if client_validation.minimumDistanceTimeSec is not None and not math.isclose(
+            server_minimum_time,
+            client_validation.minimumDistanceTimeSec,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            raise ValueError("Synchronized minimum-distance time is inconsistent.")
     scores = calculate_score(
         scenario.scenario_json.get("scoreConfig", {}),
         *server_metrics,
@@ -553,6 +566,7 @@ def _import_solution(session: Session, record: dict) -> None:
     submission.client_validation_json = client_validation.model_dump(mode="json")
     submission.status = SYNCABLE_SUBMISSION_STATUS
     submission.server_min_distance_km = submission_payload["serverMinimumDistanceKm"]
+    submission.server_min_distance_time_sec = server_minimum_time
     submission.mission_time_sec = submission_payload["missionTimeSec"]
     submission.total_delta_v_kmps = submission_payload["totalDeltaVKmPerSec"]
     submission.distance_score = scores["distanceScore"]

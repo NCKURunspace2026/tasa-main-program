@@ -162,10 +162,16 @@ export default function Leaderboard() {
         renderCell: (item) => item.officialScore.toFixed(2),
       },
       {
-        key: "finalDistance",
-        header: "Distance (km)",
+        key: "minimumDistance",
+        header: "Min distance (km)",
         width: pixel(135),
-        renderCell: (item) => item.finalDistance.toFixed(4),
+        renderCell: (item) => item.minimumDistance.toFixed(4),
+      },
+      {
+        key: "minimumDistanceTime",
+        header: "Min time (s)",
+        width: pixel(125),
+        renderCell: (item) => formatOptionalSeconds(item.minimumDistanceTime, 2),
       },
       {
         key: "totalDeltaV",
@@ -367,7 +373,8 @@ function SolutionDetailTab({ tab, detail }) {
           <MetadataList>
             <MetadataListItem label="Local rank">{detail.officialResults.rank ?? "—"}</MetadataListItem>
             <MetadataListItem label="Local score"><strong className="official-score-value">{detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
-            <MetadataListItem label="Final distance">{detail.officialResults.finalDistance.toFixed(4)} km</MetadataListItem>
+            <MetadataListItem label="Minimum distance">{detail.officialResults.minimumDistance.toFixed(4)} km</MetadataListItem>
+            <MetadataListItem label="Time at minimum distance">{formatOptionalSeconds(detail.officialResults.minimumDistanceTime, 6)}</MetadataListItem>
             <MetadataListItem label="Total Delta-V">{detail.officialResults.totalDeltaV.toFixed(4)} km/s</MetadataListItem>
             <MetadataListItem label="Total time">{detail.officialResults.totalTime.toFixed(2)} s</MetadataListItem>
             <MetadataListItem label="Burn count">{detail.officialResults.burnCount}</MetadataListItem>
@@ -401,4 +408,8 @@ function DecisionVariables({ variables, title }) {
 
 function DetailCard({ title, children }) {
   return <section className="solution-detail-card"><h3>{title}</h3>{children}</section>;
+}
+
+function formatOptionalSeconds(value, digits) {
+  return Number.isFinite(Number(value)) ? `${Number(value).toFixed(digits)} s` : "Not reported";
 }

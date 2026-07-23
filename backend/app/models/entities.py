@@ -54,6 +54,7 @@ class Submission(Base):
     client_validation_json: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     server_min_distance_km: Mapped[Optional[float]] = mapped_column(Float)
+    server_min_distance_time_sec: Mapped[Optional[float]] = mapped_column(Float)
     mission_time_sec: Mapped[Optional[float]] = mapped_column(Float)
     total_delta_v_kmps: Mapped[Optional[float]] = mapped_column(Float)
     distance_score: Mapped[Optional[float]] = mapped_column(Float)
