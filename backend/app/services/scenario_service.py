@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from ..models import Scenario
+from ..models import Scenario, SyncEvent
 from ..models.entities import utc_now
 from ..repositories import scenario_repository
 from ..schemas.scenario import ScenarioCreate, ScenarioUpdate
@@ -279,6 +279,7 @@ def create_scenario(session: Session, payload: ScenarioCreate) -> dict:
         status="active",
     )
     scenario_repository.create(session, scenario)
+    session.add(SyncEvent(record_type="scenario", record_id=scenario.id))
     session.commit()
     return _serialize(scenario)
 
@@ -297,6 +298,7 @@ def set_scenario_inactive(session: Session, scenario_id: str) -> dict | None:
     scenario.status = "inactive"
     scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
+    session.add(SyncEvent(record_type="scenario", record_id=scenario.id))
     session.commit()
     return _serialize(scenario)
 
@@ -316,6 +318,7 @@ def update_scenario(
     scenario.schema_version = definition["schemaVersion"]
     scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
+    session.add(SyncEvent(record_type="scenario", record_id=scenario.id))
     session.commit()
     return _serialize(scenario)
 

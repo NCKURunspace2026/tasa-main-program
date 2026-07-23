@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
-from app.models import Base, Solution, Submission
+from app.models import Base, Solution, Submission, SyncEvent
 from app.services.sync_service import (
     build_manifest,
     build_records,
@@ -19,6 +19,8 @@ from app.services.sync_service import (
 )
 from app.services.solution_query_service import set_solution_deleted
 from tests.test_submission_flow import submission_payload
+
+ADMIN_HEADERS = {"X-Mission-Dashboard-Admin-Token": "test-admin-token"}
 
 
 def setup_function():
@@ -102,6 +104,22 @@ def test_device_pushes_only_changes_after_the_first_successful_sync():
         record = find_record(relay, "solution", solution_id)
         assert record is not None
         assert record["payload"]["deletedAt"] is not None
+
+
+def test_scenario_delete_emits_sync_event_for_incremental_peers():
+    with TestClient(app) as client:
+        response = client.delete("/api/scenarios/SC-001", headers=ADMIN_HEADERS)
+        assert response.status_code == 200
+
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(SyncEvent)
+            .where(SyncEvent.record_type == "scenario", SyncEvent.record_id == "SC-001")
+            .order_by(SyncEvent.id.desc())
+        )
+        assert event is not None
+        record = find_record(session, "scenario", "SC-001")
+        assert record["payload"]["status"] == "inactive"
 
 
 def test_sync_reconciles_when_cursor_advanced_past_missing_records():
