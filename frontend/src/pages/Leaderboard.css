@@ -773,25 +773,45 @@
   line-height: 1.6;
 }
 
-.leaderboard-dialog input {
+.leaderboard-password-field {
+  display: grid;
+  gap: 7px;
+}
+
+.leaderboard-password-field span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.leaderboard-password-field input {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-sizing: border-box;
+  border: 1px solid rgba(148, 163, 184, 0.38);
   border-radius: 10px;
-  background: rgba(3, 11, 22, 0.72);
-  color: var(--text-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #061120;
+  color: #f8fafc;
   font: inherit;
   caret-color: #78b7f2;
 }
 
-.leaderboard-dialog input:focus {
+.leaderboard-password-field input::placeholder {
+  color: #64748b;
+}
+
+.leaderboard-password-field input:focus {
   border-color: rgba(120, 183, 242, 0.7);
   outline: 2px solid rgba(120, 183, 242, 0.16);
   outline-offset: 1px;
 }
 
-.leaderboard-dialog input::selection {
+.leaderboard-password-field input::selection {
   background: rgba(120, 183, 242, 0.35);
 }
 

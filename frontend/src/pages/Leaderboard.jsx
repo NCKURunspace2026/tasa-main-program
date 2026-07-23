@@ -39,6 +39,7 @@ export default function Leaderboard() {
   const [isRemoving, setIsRemoving] = useState(false);
   const [showRemovePassword, setShowRemovePassword] = useState(false);
   const [removePassword, setRemovePassword] = useState("");
+  const removePasswordRef = useRef(null);
   const detailRef = useRef(null);
   const skipAutoSelectionRef = useRef(false);
 
@@ -197,6 +198,12 @@ export default function Leaderboard() {
     setShowRemovePassword(true);
   }
 
+  useEffect(() => {
+    if (showRemovePassword) {
+      window.setTimeout(() => removePasswordRef.current?.focus(), 0);
+    }
+  }, [showRemovePassword]);
+
   async function confirmRemoveSelectedSolution(event) {
     event.preventDefault();
     if (!selectedSolution || isRemoving) return;
@@ -311,14 +318,18 @@ export default function Leaderboard() {
             <p className="submission-panel-eyebrow">Protected action</p>
             <h2 id="remove-solution-title">Enter administration password</h2>
             <p>Remove {selectedSolution?.solutionId} from the Leaderboard. Its dataset record will remain archived.</p>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={removePassword}
-              onChange={(event) => setRemovePassword(event.target.value)}
-              autoFocus
-              required
-            />
+            <label className="leaderboard-password-field">
+              <span>Administration password</span>
+              <input
+                ref={removePasswordRef}
+                type="password"
+                autoComplete="off"
+                value={removePassword}
+                onChange={(event) => setRemovePassword(event.target.value)}
+                placeholder="Enter password"
+                required
+              />
+            </label>
             {detailError ? <p className="leaderboard-dialog-error">{detailError}</p> : null}
             <div className="leaderboard-dialog-actions">
               <button
