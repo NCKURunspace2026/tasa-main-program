@@ -414,7 +414,9 @@
 }
 
 .sync-startup-status,
-.gmat-script-preview {
+.sync-repair-guide,
+.gmat-script-preview,
+.scenario-format-preview {
   margin: 16px 20px;
   padding: 14px;
   border: 1px solid rgba(120, 183, 242, 0.2);
@@ -422,20 +424,25 @@
   background: rgba(59, 130, 246, 0.05);
 }
 
-.sync-startup-status {
+.sync-startup-status,
+.sync-repair-guide {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
 .sync-startup-status strong,
-.gmat-script-preview strong {
+.sync-repair-guide strong,
+.gmat-script-preview strong,
+.scenario-format-preview strong {
   color: var(--text-primary);
 }
 
 .sync-startup-status span,
 .sync-startup-status small,
-.gmat-script-preview span {
+.sync-repair-guide span,
+.gmat-script-preview span,
+.scenario-format-preview span {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
@@ -451,19 +458,22 @@
   background: rgba(20, 83, 45, 0.14);
 }
 
-.gmat-script-preview {
+.gmat-script-preview,
+.scenario-format-preview {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.gmat-script-preview > div {
+.gmat-script-preview > div,
+.scenario-format-preview > div {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.gmat-script-preview pre {
+.gmat-script-preview pre,
+.scenario-format-preview pre {
   max-height: 420px;
   margin: 0;
   padding: 14px;
@@ -476,6 +486,11 @@
   font-size: 12px;
   line-height: 1.5;
   white-space: pre;
+}
+
+.scenario-format-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .settings-message-error {

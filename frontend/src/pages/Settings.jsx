@@ -130,6 +130,13 @@ const starterScenarioDefinition = {
   },
 };
 
+const scenarioPackageTemplate = {
+  scenarioId: "SC-003",
+  name: "Rendezvous Challenge",
+  description: "Chaser performs one or more impulsive maneuvers to intercept the target within the configured distance threshold.",
+  scenarioJson: starterScenarioDefinition,
+};
+
 function newScenarioForm() {
   return {
   scenarioId: "",
@@ -156,6 +163,7 @@ export default function Settings() {
   const [startupSyncStatus, setStartupSyncStatus] = useState(null);
   const [scriptPreview, setScriptPreview] = useState("");
   const [scriptPreviewError, setScriptPreviewError] = useState("");
+  const [showScenarioFormat, setShowScenarioFormat] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     configured: false,
     currentPassword: "",
@@ -288,10 +296,49 @@ export default function Settings() {
       if (result.status === "error") throw new Error(result.lastError);
       setMessage(result.status === "disabled"
         ? "Synchronization is disabled on this device."
-        : `Sync complete: pushed ${result.pushed}, pulled ${result.pulled}, conflicts ${result.conflicts.length}.`);
+        : `Sync repair complete: pushed ${result.pushed}, pulled ${result.pulled}, conflicts ${result.conflicts.length}. Relay manifest reconciliation also checked for missed records.`);
     } catch (error) {
       setMessage(error.message);
     }
+  }
+
+  async function copyScenarioFormat() {
+    const text = JSON.stringify(scenarioPackageTemplate, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage("Scenario JSON package template copied.");
+    } catch {
+      setScenarioForm({
+        scenarioId: scenarioPackageTemplate.scenarioId,
+        name: scenarioPackageTemplate.name,
+        description: scenarioPackageTemplate.description,
+        scenarioJson: JSON.stringify(scenarioPackageTemplate.scenarioJson, null, 2),
+      });
+      setMessage("Clipboard is unavailable. The template was loaded into the form instead.");
+    }
+  }
+
+  function downloadScenarioFormat() {
+    const blob = new Blob([JSON.stringify(scenarioPackageTemplate, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "mission-dashboard-scenario-template.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage("Scenario JSON package template downloaded.");
+  }
+
+  function loadScenarioFormat() {
+    setScenarioForm({
+      scenarioId: scenarioPackageTemplate.scenarioId,
+      name: scenarioPackageTemplate.name,
+      description: scenarioPackageTemplate.description,
+      scenarioJson: JSON.stringify(scenarioPackageTemplate.scenarioJson, null, 2),
+    });
+    setMessage("Scenario template loaded into the publish form.");
   }
 
   async function previewGmatScript() {
@@ -607,8 +654,12 @@ export default function Settings() {
               ) : null}
               <div className="settings-inline-actions scenario-form-actions">
                 <button className="settings-secondary-button" type="button" onClick={testConnection}>Test Relay</button>
-                <button className="settings-secondary-button" type="button" onClick={syncNow}>Sync Now</button>
+                <button className="settings-secondary-button" type="button" onClick={syncNow}>Repair Sync</button>
                 <button className="settings-primary-button" type="button" onClick={saveSettings}>Save</button>
+              </div>
+              <div className="sync-repair-guide">
+                <strong>How synchronization is repaired</strong>
+                <span>Repair Sync compares this device with the relay manifest. It pulls missing Solutions and pushes local Solutions that the relay does not have, so it does not need to know how many devices exist.</span>
               </div>
             </SettingsSection>
           ) : null}
@@ -806,6 +857,8 @@ export default function Settings() {
               <div className="scenario-schema-guide">
                 <strong>Scenario JSON map</strong>
                 <div>
+                  <code>scenarioId</code><span>Package field outside scenarioJson. Use IDs like SC-003.</span>
+                  <code>name / description</code><span>Package fields shown in Scenario selectors and administration.</span>
                   <code>epoch</code><span>Initial epoch and time system</span>
                   <code>spacecraft.target / chaser</code><span>Cartesian position (km) and velocity (km/s)</span>
                   <code>forceModel</code><span>Gravity, third bodies, drag, SRP, and relativity</span>
@@ -815,6 +868,23 @@ export default function Settings() {
                 </div>
                 <p>The editor below starts with a complete runnable template. Replace its example state vectors before publishing.</p>
               </div>
+              <div className="scenario-format-actions scenario-form-actions">
+                <button className="settings-secondary-button" type="button" onClick={() => setShowScenarioFormat((value) => !value)}>
+                  {showScenarioFormat ? "Hide JSON Format" : "Show JSON Format"}
+                </button>
+                <button className="settings-secondary-button" type="button" onClick={copyScenarioFormat}>Copy Format</button>
+                <button className="settings-secondary-button" type="button" onClick={downloadScenarioFormat}>Download Format</button>
+                <button className="settings-secondary-button" type="button" onClick={loadScenarioFormat}>Load Template</button>
+              </div>
+              {showScenarioFormat ? (
+                <div className="scenario-format-preview">
+                  <div>
+                    <strong>Complete Scenario package format</strong>
+                    <span>Load JSON Package accepts this full object. The manual form below separates scenarioId, name, description, and scenarioJson into individual fields.</span>
+                  </div>
+                  <pre>{JSON.stringify(scenarioPackageTemplate, null, 2)}</pre>
+                </div>
+              ) : null}
               <label className="settings-secondary-button settings-file-button">
                 Load JSON Package
                 <input type="file" accept=".json" onChange={uploadScenario} hidden />
