@@ -243,6 +243,11 @@ def synchronize_with_peer(session: Session, client_factory=httpx.Client) -> dict
                 if not page["hasMore"]:
                     break
 
+            reconciliation = _reconcile_with_peer_manifest(session, setting, client)
+            peer_result["imported"] += reconciliation["pushed"]
+            peer_result["conflicts"].extend(reconciliation["conflicts"])
+            local_result["imported"] += reconciliation["pulled"]
+
         setting = get_sync_setting(session)
         setting.last_sync_at = datetime.now(timezone.utc)
         setting.last_pushed_at = sync_started_at
@@ -264,6 +269,57 @@ def synchronize_with_peer(session: Session, client_factory=httpx.Client) -> dict
         setting.last_error = _sync_error_message(error)
         session.commit()
         return {"status": "error", **serialize_sync_setting(setting)}
+
+
+def _reconcile_with_peer_manifest(
+    session: Session,
+    setting: SyncSetting,
+    client: httpx.Client,
+) -> dict:
+    response = client.get(f"{setting.peer_url}/sync/manifest")
+    if response.status_code == 404:
+        return {"pushed": 0, "pulled": 0, "conflicts": []}
+    response.raise_for_status()
+    peer_items = {
+        (item["recordType"], item["recordId"]): item
+        for item in response.json()["records"]
+    }
+    local_records = {
+        (item["recordType"], item["recordId"]): item for item in build_records(session)
+    }
+    outgoing = []
+    incoming_keys = []
+    for key in set(local_records) | set(peer_items):
+        local = local_records.get(key)
+        peer = peer_items.get(key)
+        if local is not None and (peer is None or _version_key(local) > _version_key(peer)):
+            outgoing.append(local)
+        elif peer is not None and (local is None or _version_key(peer) > _version_key(local)):
+            incoming_keys.append(key)
+
+    pushed = 0
+    conflicts = []
+    for offset in range(0, len(outgoing), 100):
+        import_response = client.post(
+            f"{setting.peer_url}/sync/import",
+            json={"records": outgoing[offset:offset + 100]},
+        )
+        import_response.raise_for_status()
+        result = import_response.json()
+        pushed += result["imported"]
+        conflicts.extend(result["conflicts"])
+
+    incoming = []
+    for record_type, record_id in incoming_keys:
+        record_response = client.get(f"{setting.peer_url}/sync/records/{record_type}/{record_id}")
+        record_response.raise_for_status()
+        incoming.append(record_response.json())
+    local_result = import_records(session, incoming, emit_events=False)
+    return {
+        "pushed": pushed,
+        "pulled": local_result["imported"],
+        "conflicts": conflicts + local_result["conflicts"],
+    }
 
 
 def _synchronize_with_legacy_peer(

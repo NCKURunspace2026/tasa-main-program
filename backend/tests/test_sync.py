@@ -9,6 +9,7 @@ from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
 from app.models import Base, Solution, Submission
 from app.services.sync_service import (
+    build_manifest,
     build_records,
     find_record,
     get_sync_setting,
@@ -101,6 +102,52 @@ def test_device_pushes_only_changes_after_the_first_successful_sync():
         record = find_record(relay, "solution", solution_id)
         assert record is not None
         assert record["payload"]["deletedAt"] is not None
+
+
+def test_sync_reconciles_when_cursor_advanced_past_missing_records():
+    with TestClient(app) as client:
+        solution_id = _create_passed_solution(client)
+
+    relay_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(relay_engine)
+    with SessionLocal() as local, Session(relay_engine) as relay:
+        import_records(relay, build_records(local))
+        reset_database(local)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        with Session(relay_engine) as relay:
+            if request.method == "GET" and request.url.path.endswith("/sync/changes"):
+                return httpx.Response(200, json=read_changes(
+                    relay,
+                    after=int(request.url.params.get("after", 0)),
+                    limit=int(request.url.params.get("limit", 500)),
+                ))
+            if request.method == "GET" and request.url.path.endswith("/sync/manifest"):
+                return httpx.Response(200, json=build_manifest(relay))
+            if request.method == "GET" and "/sync/records/" in request.url.path:
+                record_type, record_id = request.url.path.rsplit("/", 2)[-2:]
+                record = find_record(relay, record_type, record_id)
+                return httpx.Response(200, json=record) if record else httpx.Response(404)
+            if request.method == "POST" and request.url.path.endswith("/sync/import"):
+                payload = json.loads(request.content)
+                return httpx.Response(200, json=import_records(relay, payload["records"]))
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+
+    def client_factory(**kwargs):
+        return httpx.Client(transport=transport, **kwargs)
+
+    with SessionLocal() as local:
+        setting = get_sync_setting(local)
+        setting.peer_url = "https://relay.test/api"
+        setting.enabled = True
+        setting.remote_cursor = 999
+        local.commit()
+        result = synchronize_with_peer(local, client_factory=client_factory)
+        assert result["status"] == "ok"
+        assert result["pulled"] >= 1
+        assert local.get(Solution, solution_id) is not None
 
 
 def test_sync_records_are_hash_verified_and_idempotent():
