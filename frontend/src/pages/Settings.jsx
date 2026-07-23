@@ -359,8 +359,14 @@ export default function Settings() {
       return;
     }
     try {
+      const scenarioJson = buildEditedScenarioJson(scenario);
       const script = await window.missionDashboardDesktop.generateGmatScript({
-        scenario,
+        scenario: {
+          ...scenario,
+          name: scenarioDetails.name.trim() || scenario.name,
+          description: scenarioDetails.description.trim(),
+          scenarioJson,
+        },
         finalDecisionVariables: {
           tWait: 0,
           burns: [],
@@ -501,6 +507,77 @@ export default function Settings() {
     }));
   }
 
+  function buildEditedScenarioJson(scenario) {
+    const scenarioJson = structuredClone(scenario.scenarioJson);
+    const gravityDegree = nonNegativeInteger(scenarioLimits.gravityDegree, "Gravity degree");
+    const gravityOrder = nonNegativeInteger(scenarioLimits.gravityOrder, "Gravity order");
+    if (gravityOrder > gravityDegree) {
+      throw new Error("Gravity order cannot be greater than gravity degree.");
+    }
+    if (scenarioLimits.dragEnabled && scenarioLimits.centralBody !== "Earth") {
+      throw new Error("The available atmosphere models currently support Earth only.");
+    }
+    scenarioJson.forceModel = {
+      centralBody: scenarioLimits.centralBody,
+      gravity: {
+        type: "spherical-harmonic",
+        enabled: scenarioLimits.gravityEnabled,
+        degree: gravityDegree,
+        order: gravityOrder,
+      },
+      pointMasses: [
+        ...(scenarioLimits.pointMassSun ? ["Sun"] : []),
+        ...(scenarioLimits.pointMassLuna ? ["Luna"] : []),
+      ],
+      drag: {
+        enabled: scenarioLimits.dragEnabled,
+        model: scenarioLimits.dragEnabled ? scenarioLimits.dragModel : null,
+      },
+      solarRadiationPressure: {
+        enabled: scenarioLimits.solarRadiationPressureEnabled,
+      },
+      relativisticCorrection: {
+        enabled: scenarioLimits.relativisticCorrectionEnabled,
+      },
+    };
+    scenarioJson.propagator = {
+      ...scenarioJson.propagator,
+      integrator: scenarioLimits.propagatorIntegrator,
+      initialStepSec: positiveNumber(scenarioLimits.initialStepSec, "Initial step"),
+      maxStepSec: positiveNumber(scenarioLimits.maxStepSec, "Maximum step"),
+      minStepSec: positiveNumber(scenarioLimits.minStepSec, "Minimum step"),
+      accuracy: positiveNumber(scenarioLimits.accuracy, "Accuracy"),
+    };
+    scenarioJson.validation = {
+      ...scenarioJson.validation,
+      requiredFinalDistanceKm: nonNegativeNumber(scenarioLimits.requiredFinalDistanceKm, "Required final distance"),
+      maximumTotalDeltaV: positiveNumber(scenarioLimits.maximumTotalDeltaV, "Maximum total Delta-V"),
+      maximumMissionTimeSec: positiveNumber(scenarioLimits.maximumMissionTimeSec, "Maximum mission time"),
+      minimumBurnCount: positiveInteger(scenarioLimits.minimumBurnCount, "Minimum burn count"),
+      maximumBurnCount: positiveInteger(scenarioLimits.maximumBurnCount, "Maximum burn count"),
+      minimumBurnSeparationSec: nonNegativeNumber(scenarioLimits.minimumBurnSeparationSec, "Minimum burn separation"),
+    };
+    scenarioJson.scoreConfig = {
+      ...scenarioJson.scoreConfig,
+      distanceReferenceKm: nonNegativeNumber(scenarioLimits.distanceReferenceKm, "Distance reference"),
+      distanceDecayKm: positiveNumber(scenarioLimits.distanceDecayKm, "Distance decay"),
+      timeReferenceSec: nonNegativeNumber(scenarioLimits.timeReferenceSec, "Time reference"),
+      timeSlope: positiveNumber(scenarioLimits.timeSlope, "Time slope"),
+      deltaVReferenceKmPerSec: nonNegativeNumber(scenarioLimits.deltaVReferenceKmPerSec, "Delta-V reference"),
+      deltaVSlope: positiveNumber(scenarioLimits.deltaVSlope, "Delta-V slope"),
+      distanceWeight: nonNegativeNumber(scenarioLimits.distanceWeight, "Distance weight"),
+      timeWeight: nonNegativeNumber(scenarioLimits.timeWeight, "Time weight"),
+      deltaVWeight: nonNegativeNumber(scenarioLimits.deltaVWeight, "Delta-V weight"),
+    };
+    if (scenarioJson.propagator.minStepSec > scenarioJson.propagator.maxStepSec) {
+      throw new Error("Minimum step cannot be greater than maximum step.");
+    }
+    if (scenarioJson.validation.minimumBurnCount > scenarioJson.validation.maximumBurnCount) {
+      throw new Error("Minimum burn count cannot be greater than maximum burn count.");
+    }
+    return scenarioJson;
+  }
+
   async function saveScenarioLimits(event) {
     event.preventDefault();
     const scenario = scenarios.find((item) => item.scenarioId === selectedScenarioId);
@@ -508,73 +585,7 @@ export default function Settings() {
     setIsSavingScenario(true);
     setMessage("");
     try {
-      const scenarioJson = structuredClone(scenario.scenarioJson);
-      const gravityDegree = nonNegativeInteger(scenarioLimits.gravityDegree, "Gravity degree");
-      const gravityOrder = nonNegativeInteger(scenarioLimits.gravityOrder, "Gravity order");
-      if (gravityOrder > gravityDegree) {
-        throw new Error("Gravity order cannot be greater than gravity degree.");
-      }
-      if (scenarioLimits.dragEnabled && scenarioLimits.centralBody !== "Earth") {
-        throw new Error("The available atmosphere models currently support Earth only.");
-      }
-      scenarioJson.forceModel = {
-        centralBody: scenarioLimits.centralBody,
-        gravity: {
-          type: "spherical-harmonic",
-          enabled: scenarioLimits.gravityEnabled,
-          degree: gravityDegree,
-          order: gravityOrder,
-        },
-        pointMasses: [
-          ...(scenarioLimits.pointMassSun ? ["Sun"] : []),
-          ...(scenarioLimits.pointMassLuna ? ["Luna"] : []),
-        ],
-        drag: {
-          enabled: scenarioLimits.dragEnabled,
-          model: scenarioLimits.dragEnabled ? scenarioLimits.dragModel : null,
-        },
-        solarRadiationPressure: {
-          enabled: scenarioLimits.solarRadiationPressureEnabled,
-        },
-        relativisticCorrection: {
-          enabled: scenarioLimits.relativisticCorrectionEnabled,
-        },
-      };
-      scenarioJson.propagator = {
-        ...scenarioJson.propagator,
-        integrator: scenarioLimits.propagatorIntegrator,
-        initialStepSec: positiveNumber(scenarioLimits.initialStepSec, "Initial step"),
-        maxStepSec: positiveNumber(scenarioLimits.maxStepSec, "Maximum step"),
-        minStepSec: positiveNumber(scenarioLimits.minStepSec, "Minimum step"),
-        accuracy: positiveNumber(scenarioLimits.accuracy, "Accuracy"),
-      };
-      scenarioJson.validation = {
-        ...scenarioJson.validation,
-        requiredFinalDistanceKm: nonNegativeNumber(scenarioLimits.requiredFinalDistanceKm, "Required final distance"),
-        maximumTotalDeltaV: positiveNumber(scenarioLimits.maximumTotalDeltaV, "Maximum total Delta-V"),
-        maximumMissionTimeSec: positiveNumber(scenarioLimits.maximumMissionTimeSec, "Maximum mission time"),
-        minimumBurnCount: positiveInteger(scenarioLimits.minimumBurnCount, "Minimum burn count"),
-        maximumBurnCount: positiveInteger(scenarioLimits.maximumBurnCount, "Maximum burn count"),
-        minimumBurnSeparationSec: nonNegativeNumber(scenarioLimits.minimumBurnSeparationSec, "Minimum burn separation"),
-      };
-      scenarioJson.scoreConfig = {
-        ...scenarioJson.scoreConfig,
-        distanceReferenceKm: nonNegativeNumber(scenarioLimits.distanceReferenceKm, "Distance reference"),
-        distanceDecayKm: positiveNumber(scenarioLimits.distanceDecayKm, "Distance decay"),
-        timeReferenceSec: nonNegativeNumber(scenarioLimits.timeReferenceSec, "Time reference"),
-        timeSlope: positiveNumber(scenarioLimits.timeSlope, "Time slope"),
-        deltaVReferenceKmPerSec: nonNegativeNumber(scenarioLimits.deltaVReferenceKmPerSec, "Delta-V reference"),
-        deltaVSlope: positiveNumber(scenarioLimits.deltaVSlope, "Delta-V slope"),
-        distanceWeight: nonNegativeNumber(scenarioLimits.distanceWeight, "Distance weight"),
-        timeWeight: nonNegativeNumber(scenarioLimits.timeWeight, "Time weight"),
-        deltaVWeight: nonNegativeNumber(scenarioLimits.deltaVWeight, "Delta-V weight"),
-      };
-      if (scenarioJson.propagator.minStepSec > scenarioJson.propagator.maxStepSec) {
-        throw new Error("Minimum step cannot be greater than maximum step.");
-      }
-      if (scenarioJson.validation.minimumBurnCount > scenarioJson.validation.maximumBurnCount) {
-        throw new Error("Minimum burn count cannot be greater than maximum burn count.");
-      }
+      const scenarioJson = buildEditedScenarioJson(scenario);
       const updated = await updateScenarioRequest(selectedScenarioId, {
         name: scenarioDetails.name.trim(),
         description: scenarioDetails.description.trim(),
@@ -857,6 +868,14 @@ export default function Settings() {
                     disabled={!selectedScenarioId}
                   />
                 </SettingsRow>
+                <div className="scenario-edit-actions">
+                  <button className="settings-primary-button" type="submit" disabled={isSavingScenario || !selectedScenarioId}>
+                    {isSavingScenario ? "Saving…" : "Save Scenario"}
+                  </button>
+                  <button className="settings-secondary-button" type="button" onClick={previewGmatScript} disabled={!selectedScenarioId}>
+                    Preview GMAT Script
+                  </button>
+                </div>
                 <div className="scenario-limit-heading">Force Model</div>
                 <p className="scenario-model-note">
                   Central-body point-mass gravity is always applied. Gravity field enables spherical harmonics above that baseline.
@@ -918,7 +937,7 @@ export default function Settings() {
                 <div className="gmat-script-preview">
                   <div>
                     <strong>Generated GMAT script</strong>
-                    <span>Preview uses tWait=0, no burns, and finalCoastTime=60 s. Save Scenario Limits first to preview changed settings.</span>
+                    <span>Preview uses the current unsaved Scenario settings with tWait=0, no burns, and finalCoastTime=60 s.</span>
                   </div>
                   <pre>{scriptPreview}</pre>
                 </div>

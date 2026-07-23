@@ -255,6 +255,17 @@
   margin: 16px 20px;
 }
 
+.scenario-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 20px 20px;
+  padding: 14px;
+  border: 1px solid rgba(120, 183, 242, 0.22);
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.06);
+}
+
 .scenario-admin-divider {
   margin-top: 8px;
   padding: 18px 20px 0;
