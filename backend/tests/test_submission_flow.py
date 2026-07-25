@@ -219,6 +219,40 @@ def test_scenario_update_can_rename_existing_scenario():
         assert response.json()["description"] == "Updated description."
 
 
+def test_scenario_update_recomputes_existing_leaderboard_results():
+    scenario_id = "SC-999"
+    payload = submission_payload()
+    payload["scenarioId"] = scenario_id
+    with TestClient(app) as client:
+        scenario = client.post("/api/scenarios", json={
+            "scenarioId": scenario_id,
+            "name": "Recompute Scenario",
+            "description": "Dedicated test Scenario.",
+            "scenarioJson": scenario_json(),
+        })
+        assert scenario.status_code == 201
+        created = client.post("/api/submissions", json=payload)
+        assert created.status_code == 201
+        solution_id = created.json()["solutionId"]
+        assert client.get(f"/api/scenarios/{scenario_id}/leaderboard").json()["total"] == 1
+
+        updated_definition = scenario_json()
+        updated_definition["validation"]["requiredFinalDistanceKm"] = 4.0
+        updated_definition["scoreConfig"]["distanceReferenceKm"] = 4.0
+        response = client.put(f"/api/scenarios/{scenario_id}", json={
+            "name": "Stricter Scenario",
+            "description": "Old close approaches no longer pass.",
+            "scenarioJson": updated_definition,
+        })
+        assert response.status_code == 200
+
+        leaderboard = client.get(f"/api/scenarios/{scenario_id}/leaderboard").json()
+        assert leaderboard["total"] == 0
+        detail = client.get(f"/api/solutions/{solution_id}").json()
+        assert detail["status"] == "failed"
+        assert detail["officialResults"]["officialScore"] is None
+
+
 def test_scenario_can_be_soft_deleted_with_admin_token():
     with TestClient(app) as client:
         assert client.delete("/api/scenarios/SC-001").status_code == 403

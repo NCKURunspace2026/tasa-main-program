@@ -49,6 +49,28 @@ test("reports the first elapsed time inside the required distance", () => {
   }
 });
 
+test("reports the minimum spacecraft radius norms", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mission-dashboard-parser-"));
+  const reportPath = path.join(directory, "report.txt");
+  fs.writeFileSync(reportPath, [
+    "% elapsed chaser xyz target xyz",
+    "0 7000 0 0 8000 0 0",
+    "10 6000 0 0 7900 0 0",
+    "20 6500 0 0 7800 0 0",
+    "",
+  ].join("\n"));
+
+  try {
+    const result = parseGmatReport(reportPath);
+    assert.equal(result.minimumChaserRadiusKm, 6000);
+    assert.equal(result.minimumChaserRadiusTimeSec, 10);
+    assert.equal(result.minimumTargetRadiusKm, 7800);
+    assert.equal(result.minimumTargetRadiusTimeSec, 20);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("keeps parsing legacy reports without elapsed time", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mission-dashboard-parser-"));
   const reportPath = path.join(directory, "report.txt");

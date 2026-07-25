@@ -14,8 +14,14 @@ function parseGmatReport(reportPath, { requiredDistanceKm } = {}) {
   const distances = rows.map(({ state: [cx, cy, cz, tx, ty, tz] }) => (
     Math.hypot(cx - tx, cy - ty, cz - tz)
   ));
+  const chaserRadii = rows.map(({ state: [cx, cy, cz] }) => Math.hypot(cx, cy, cz));
+  const targetRadii = rows.map(({ state: [, , , tx, ty, tz] }) => Math.hypot(tx, ty, tz));
   const minimumDistanceKm = Math.min(...distances);
   const minimumIndex = distances.indexOf(minimumDistanceKm);
+  const minimumChaserRadiusKm = Math.min(...chaserRadii);
+  const minimumChaserRadiusIndex = chaserRadii.indexOf(minimumChaserRadiusKm);
+  const minimumTargetRadiusKm = Math.min(...targetRadii);
+  const minimumTargetRadiusIndex = targetRadii.indexOf(minimumTargetRadiusKm);
   const firstRequiredIndex = Number.isFinite(requiredDistanceKm)
     ? distances.findIndex((distance) => distance <= requiredDistanceKm)
     : -1;
@@ -25,6 +31,10 @@ function parseGmatReport(reportPath, { requiredDistanceKm } = {}) {
     minimumDistanceTimeSec: rows[minimumIndex].timeSec,
     firstRequiredDistanceKm: firstRequiredIndex >= 0 ? distances[firstRequiredIndex] : null,
     firstRequiredDistanceTimeSec: firstRequiredIndex >= 0 ? rows[firstRequiredIndex].timeSec : null,
+    minimumChaserRadiusKm,
+    minimumChaserRadiusTimeSec: rows[minimumChaserRadiusIndex].timeSec,
+    minimumTargetRadiusKm,
+    minimumTargetRadiusTimeSec: rows[minimumTargetRadiusIndex].timeSec,
     finalDistanceKm: distances.at(-1),
     finalChaserPositionKm: finalState.slice(0, 3),
     finalTargetPositionKm: finalState.slice(3, 6),

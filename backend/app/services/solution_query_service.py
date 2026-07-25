@@ -10,7 +10,7 @@ from ..models import Scenario, Solution, Submission, SyncEvent
 from ..models.entities import utc_now
 from ..repositories.solution_repository import find_by_id
 from ..schemas.submission import SolutionRevalidationInput
-from .score_service import InvalidScoreConfigError, calculate_score
+from .validation_result_service import recompute_submission_result
 
 
 def get_solution_detail(
@@ -115,16 +115,17 @@ def update_solution_validation(
         abs_tol=1e-9,
     ):
         raise ValueError("Local GMAT Delta-V does not match the repaired decision variables.")
-    try:
-        scores = calculate_score(
-            scenario.scenario_json.get("scoreConfig", {}),
-            payload.clientValidation.minimumDistanceKm,
-            payload.clientValidation.missionTimeSec,
-            payload.clientValidation.totalDeltaVKmPerSec,
-            0,
-        )
-    except InvalidScoreConfigError as error:
-        raise ValueError(f"Score was not produced: {error}") from error
+    result = recompute_submission_result(
+        scenario.scenario_json,
+        payload.decisionVariables.model_dump(mode="json"),
+        payload.clientValidation.minimumDistanceKm,
+        payload.clientValidation.missionTimeSec,
+        payload.clientValidation.totalDeltaVKmPerSec,
+        0,
+    )
+    if result.scores is None:
+        raise ValueError(result.error_message or "Score was not produced.")
+    scores = result.scores
 
     now = utc_now()
     solution.decision_variables_json = payload.decisionVariables.model_dump(mode="json")

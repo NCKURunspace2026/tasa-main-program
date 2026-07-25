@@ -9,6 +9,7 @@ from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
 from app.models import Base, Solution, Submission, SyncEvent
 from app.services.sync_service import (
+    _content_hash,
     build_manifest,
     build_records,
     find_record,
@@ -203,3 +204,26 @@ def test_passed_solution_can_rebuild_an_empty_replica_and_recomputes_score(tmp_p
         rebuilt = find_record(replica, "solution", solution_id)
         source = next(record for record in records if record["recordId"] == solution_id)
         assert rebuilt["contentHash"] == source["contentHash"]
+
+
+def test_imported_scenario_update_recomputes_existing_local_solutions():
+    with TestClient(app) as client:
+        solution_id = _create_passed_solution(client)
+
+    with SessionLocal() as session:
+        scenario_record = find_record(session, "scenario", "SC-001")
+        stricter = json.loads(json.dumps(scenario_record))
+        stricter["updatedAt"] = "2099-01-01T00:00:00+00:00"
+        stricter["payload"]["updatedAt"] = stricter["updatedAt"]
+        stricter["payload"]["scenarioJson"]["validation"]["requiredFinalDistanceKm"] = 4.0
+        stricter["payload"]["scenarioJson"]["scoreConfig"]["distanceReferenceKm"] = 4.0
+        unsigned = {key: value for key, value in stricter.items() if key != "contentHash"}
+        stricter["contentHash"] = _content_hash(unsigned)
+
+        result = import_records(session, [stricter])
+        assert result["conflicts"] == []
+        assert result["imported"] == 1
+        submission = session.scalar(select(Submission).where(Submission.solution_id == solution_id))
+        assert submission.status == "failed"
+        assert submission.total_score is None
+        assert find_record(session, "solution", solution_id) is None

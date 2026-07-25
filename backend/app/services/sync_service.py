@@ -21,7 +21,11 @@ from ..models import (
 )
 from ..schemas.submission import ClientValidationInput, DecisionVariablesInput
 from .scenario_service import normalize_scenario
-from .score_service import calculate_score
+from .validation_result_service import (
+    apply_recomputed_submission,
+    recompute_scenario_submissions,
+    recompute_submission_result,
+)
 
 
 SYNC_SCHEMA_VERSION = 1
@@ -494,6 +498,12 @@ def _import_scenario(session: Session, record: dict) -> None:
     scenario.status = payload.get("status", "active")
     scenario.created_at = _datetime(payload["createdAt"])
     scenario.updated_at = _datetime(payload["updatedAt"])
+    recompute_scenario_submissions(
+        session,
+        scenario,
+        updated_at=scenario.updated_at,
+        emit_sync_events=False,
+    )
 
 
 def _import_solution(session: Session, record: dict) -> None:
@@ -533,9 +543,12 @@ def _import_solution(session: Session, record: dict) -> None:
             abs_tol=1e-9,
         ):
             raise ValueError("Synchronized minimum-distance time is inconsistent.")
-    scores = calculate_score(
-        scenario.scenario_json.get("scoreConfig", {}),
-        *server_metrics,
+    recomputed = recompute_submission_result(
+        scenario.scenario_json,
+        decision_variables.model_dump(mode="json"),
+        server_metrics[0],
+        server_metrics[1],
+        server_metrics[2],
         float(submission_payload.get("penaltyScore", 0)),
     )
     solution = session.get(Solution, record["recordId"])
@@ -569,15 +582,23 @@ def _import_solution(session: Session, record: dict) -> None:
     submission.server_min_distance_time_sec = server_minimum_time
     submission.mission_time_sec = submission_payload["missionTimeSec"]
     submission.total_delta_v_kmps = submission_payload["totalDeltaVKmPerSec"]
-    submission.distance_score = scores["distanceScore"]
-    submission.time_score = scores["timeScore"]
-    submission.delta_v_score = scores["deltaVScore"]
-    submission.penalty_score = scores["penaltyScore"]
-    submission.total_score = scores["totalScore"]
+    submission.distance_score = submission_payload["distanceScore"]
+    submission.time_score = submission_payload["timeScore"]
+    submission.delta_v_score = submission_payload["deltaVScore"]
+    submission.penalty_score = submission_payload["penaltyScore"]
+    submission.total_score = submission_payload["totalScore"]
     submission.created_at = _datetime(submission_payload["createdAt"])
     submission.updated_at = _datetime(submission_payload["updatedAt"])
     submission.validated_at = _datetime(submission_payload["validatedAt"])
     submission.error_message = None
+    apply_recomputed_submission(
+        submission,
+        recomputed,
+        updated_at=max(
+            _as_utc(value) for value in (submission.updated_at, scenario.updated_at)
+            if value is not None
+        ),
+    )
 
 
 def _datetime(value: str | None) -> datetime | None:

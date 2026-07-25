@@ -2,6 +2,10 @@ const { runGmat } = require("./gmatRunner.cjs");
 
 function magnitude(deltaV) { return Math.hypot(...deltaV); }
 
+const CENTRAL_BODY_RADIUS_KM = {
+  Earth: 6378.1363,
+};
+
 function totalMissionTime(finalDecisionVariables) {
   return finalDecisionVariables.tWait + finalDecisionVariables.finalCoastTime + finalDecisionVariables.burns.reduce((sum, burn) => sum + (burn.timeToNextBurn ?? 0), 0);
 }
@@ -44,6 +48,8 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
   const definition = scenario.scenarioJson ?? scenario.definition ?? {};
   const limits = definition.validation ?? definition.constraints ?? {};
   const distanceLimit = limits.requiredFinalDistanceKm ?? limits.interceptionDistance ?? limits.finalDistanceThreshold ?? limits.maximumFinalDistance;
+  const minimumSpacecraftRadiusKm = limits.minimumSpacecraftRadiusKm
+    ?? CENTRAL_BODY_RADIUS_KM[definition.forceModel?.centralBody ?? definition.centralBody ?? "Earth"];
   const deltaVPerBurnLimit = limits.maximumDeltaVPerBurn ?? limits.maximumTotalDeltaV;
   const timeLimit = limits.maximumSimulationTimeSec
     ?? limits.maximumMissionTimeSec
@@ -55,6 +61,22 @@ async function validateSubmission({ executablePath, scenario, finalDecisionVaria
     ["minimumDistance", propagation.minimumDistanceKm, distanceLimit],
     ["totalTime", totalTime, timeLimit],
   ].filter(([, , limit]) => Number.isFinite(limit)).map(([name, value, limit]) => ({ name, value, limit, operator: "<=", satisfied: value <= limit }));
+  if (Number.isFinite(minimumSpacecraftRadiusKm)) {
+    constraints.push({
+      name: "chaserRadiusNorm",
+      value: propagation.minimumChaserRadiusKm,
+      limit: minimumSpacecraftRadiusKm,
+      operator: ">=",
+      satisfied: propagation.minimumChaserRadiusKm >= minimumSpacecraftRadiusKm,
+    });
+    constraints.push({
+      name: "targetRadiusNorm",
+      value: propagation.minimumTargetRadiusKm,
+      limit: minimumSpacecraftRadiusKm,
+      operator: ">=",
+      satisfied: propagation.minimumTargetRadiusKm >= minimumSpacecraftRadiusKm,
+    });
+  }
   if (Number.isFinite(deltaVPerBurnLimit)) {
     scoredDecisionVariables.burns.forEach((burn, index) => {
       const value = magnitude(burn.deltaV);

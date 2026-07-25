@@ -10,6 +10,7 @@ from ..models import Scenario, SyncEvent
 from ..models.entities import utc_now
 from ..repositories import scenario_repository
 from ..schemas.scenario import ScenarioCreate, ScenarioUpdate
+from .validation_result_service import recompute_scenario_submissions
 
 
 class ScenarioAlreadyExistsError(ValueError):
@@ -321,6 +322,7 @@ def update_scenario(
     scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
     session.add(SyncEvent(record_type="scenario", record_id=scenario.id))
+    recompute_scenario_submissions(session, scenario, updated_at=scenario.updated_at)
     session.commit()
     return _serialize(scenario)
 

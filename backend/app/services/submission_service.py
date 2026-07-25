@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..models import Solution, Submission
 from ..repositories import scenario_repository, solution_repository, submission_repository
 from ..schemas.submission import SubmissionInput
-from .score_service import InvalidScoreConfigError, calculate_score
+from .validation_result_service import recompute_submission_result
 
 
 class ScenarioNotFoundError(ValueError):
@@ -66,16 +66,17 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         name=payload.solution.name.strip(),
         decision_variables_json=payload.solution.decisionVariables.model_dump(mode="json"),
     )
-    try:
-        scores = calculate_score(
-            scenario.scenario_json.get("scoreConfig", {}),
-            payload.clientValidation.minimumDistanceKm,
-            payload.clientValidation.missionTimeSec,
-            payload.clientValidation.totalDeltaVKmPerSec,
-            0,
-        )
-    except InvalidScoreConfigError as error:
-        raise ValueError(f"Score was not produced: {error}") from error
+    result = recompute_submission_result(
+        scenario.scenario_json,
+        payload.solution.decisionVariables.model_dump(mode="json"),
+        payload.clientValidation.minimumDistanceKm,
+        payload.clientValidation.missionTimeSec,
+        payload.clientValidation.totalDeltaVKmPerSec,
+        0,
+    )
+    if result.scores is None:
+        raise ValueError(result.error_message or "Score was not produced.")
+    scores = result.scores
 
     now = datetime.now(timezone.utc)
     submission = Submission(
