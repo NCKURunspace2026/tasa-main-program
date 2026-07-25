@@ -53,6 +53,8 @@ class ClientValidationInput(StrictModel):
     provider: str = Field(min_length=1, max_length=80)
     minimumDistanceKm: float = Field(ge=0)
     minimumDistanceTimeSec: Optional[float] = Field(default=None, ge=0)
+    minimumChaserRadiusKm: Optional[float] = Field(default=None, ge=0)
+    minimumTargetRadiusKm: Optional[float] = Field(default=None, ge=0)
     missionTimeSec: float = Field(ge=0)
     totalDeltaVKmPerSec: float = Field(ge=0)
 
@@ -63,6 +65,9 @@ class ClientValidationInput(StrictModel):
             raise ValueError("Client validation metrics must be finite.")
         if self.minimumDistanceTimeSec is not None and not math.isfinite(self.minimumDistanceTimeSec):
             raise ValueError("Client validation minimum-distance time must be finite.")
+        radius_values = (self.minimumChaserRadiusKm, self.minimumTargetRadiusKm)
+        if any(value is not None and not math.isfinite(value) for value in radius_values):
+            raise ValueError("Client validation spacecraft radius metrics must be finite.")
         return self
 
 

@@ -24,6 +24,8 @@ def recompute_submission_result(
     mission_time_sec: float | None,
     total_delta_v_kmps: float | None,
     penalty_score: float = 0,
+    minimum_chaser_radius_km: float | None = None,
+    minimum_target_radius_km: float | None = None,
 ) -> RecomputedSubmission:
     error_message = _validation_error(
         scenario_json,
@@ -31,6 +33,8 @@ def recompute_submission_result(
         minimum_distance_km,
         mission_time_sec,
         total_delta_v_kmps,
+        minimum_chaser_radius_km,
+        minimum_target_radius_km,
     )
     if error_message is not None:
         return RecomputedSubmission("failed", None, error_message)
@@ -112,6 +116,8 @@ def recompute_scenario_submissions(
             submission.mission_time_sec,
             submission.total_delta_v_kmps,
             float(submission.penalty_score or 0),
+            submission.server_min_chaser_radius_km,
+            submission.server_min_target_radius_km,
         )
         if apply_recomputed_submission(submission, result, updated_at=updated_at):
             changed += 1
@@ -126,6 +132,8 @@ def _validation_error(
     minimum_distance_km: float | None,
     mission_time_sec: float | None,
     total_delta_v_kmps: float | None,
+    minimum_chaser_radius_km: float | None,
+    minimum_target_radius_km: float | None,
 ) -> str | None:
     metrics = (minimum_distance_km, mission_time_sec, total_delta_v_kmps)
     if any(value is None or not math.isfinite(float(value)) for value in metrics):
@@ -135,6 +143,19 @@ def _validation_error(
         return "Closest approach is outside the Scenario required distance."
     if _exceeds(mission_time_sec, limits.get("maximumMissionTimeSec")):
         return "Mission time exceeds the Scenario limit."
+
+    minimum_radius = limits.get("minimumSpacecraftRadiusKm")
+    if minimum_radius is None and _central_body(scenario_json) == "Earth":
+        minimum_radius = 6378.1363
+    if minimum_radius is not None:
+        if minimum_chaser_radius_km is None or minimum_target_radius_km is None:
+            return "Stored GMAT spacecraft radius metrics are missing. Re-run GMAT repair."
+        if not math.isfinite(float(minimum_chaser_radius_km)) or not math.isfinite(float(minimum_target_radius_km)):
+            return "Stored GMAT spacecraft radius metrics are invalid. Re-run GMAT repair."
+        if float(minimum_chaser_radius_km) < float(minimum_radius):
+            return "Chaser trajectory intersects the central body."
+        if float(minimum_target_radius_km) < float(minimum_radius):
+            return "Target trajectory intersects the central body."
 
     burns = decision_variables.get("burns", []) if isinstance(decision_variables, dict) else []
     maximum_burns = limits.get("maximumBurnCount")
@@ -159,3 +180,8 @@ def _validation_error(
 
 def _exceeds(value: float | None, limit) -> bool:
     return limit is not None and float(value) > float(limit)
+
+
+def _central_body(scenario_json: dict) -> str | None:
+    force_model = scenario_json.get("forceModel", {}) if isinstance(scenario_json, dict) else {}
+    return force_model.get("centralBody") or scenario_json.get("centralBody")

@@ -426,6 +426,8 @@ def _solution_record(solution: Solution, submission: Submission) -> dict:
             "status": submission.status,
             "serverMinimumDistanceKm": submission.server_min_distance_km,
             "serverMinimumDistanceTimeSec": submission.server_min_distance_time_sec,
+            "serverMinimumChaserRadiusKm": submission.server_min_chaser_radius_km,
+            "serverMinimumTargetRadiusKm": submission.server_min_target_radius_km,
             "missionTimeSec": submission.mission_time_sec,
             "totalDeltaVKmPerSec": submission.total_delta_v_kmps,
             "distanceScore": submission.distance_score,
@@ -543,6 +545,30 @@ def _import_solution(session: Session, record: dict) -> None:
             abs_tol=1e-9,
         ):
             raise ValueError("Synchronized minimum-distance time is inconsistent.")
+    server_minimum_chaser_radius = _optional_finite_float(
+        submission_payload.get("serverMinimumChaserRadiusKm"),
+        "Synchronized chaser radius metric is invalid.",
+    )
+    server_minimum_target_radius = _optional_finite_float(
+        submission_payload.get("serverMinimumTargetRadiusKm"),
+        "Synchronized target radius metric is invalid.",
+    )
+    if client_validation.minimumChaserRadiusKm is not None and server_minimum_chaser_radius is not None:
+        if not math.isclose(
+            server_minimum_chaser_radius,
+            client_validation.minimumChaserRadiusKm,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            raise ValueError("Synchronized chaser radius metric is inconsistent.")
+    if client_validation.minimumTargetRadiusKm is not None and server_minimum_target_radius is not None:
+        if not math.isclose(
+            server_minimum_target_radius,
+            client_validation.minimumTargetRadiusKm,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            raise ValueError("Synchronized target radius metric is inconsistent.")
     recomputed = recompute_submission_result(
         scenario.scenario_json,
         decision_variables.model_dump(mode="json"),
@@ -550,6 +576,8 @@ def _import_solution(session: Session, record: dict) -> None:
         server_metrics[1],
         server_metrics[2],
         float(submission_payload.get("penaltyScore", 0)),
+        server_minimum_chaser_radius,
+        server_minimum_target_radius,
     )
     solution = session.get(Solution, record["recordId"])
     if solution is None:
@@ -580,6 +608,8 @@ def _import_solution(session: Session, record: dict) -> None:
     submission.status = SYNCABLE_SUBMISSION_STATUS
     submission.server_min_distance_km = submission_payload["serverMinimumDistanceKm"]
     submission.server_min_distance_time_sec = server_minimum_time
+    submission.server_min_chaser_radius_km = server_minimum_chaser_radius
+    submission.server_min_target_radius_km = server_minimum_target_radius
     submission.mission_time_sec = submission_payload["missionTimeSec"]
     submission.total_delta_v_kmps = submission_payload["totalDeltaVKmPerSec"]
     submission.distance_score = submission_payload["distanceScore"]
@@ -603,6 +633,15 @@ def _import_solution(session: Session, record: dict) -> None:
 
 def _datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
+
+
+def _optional_finite_float(value, message: str) -> float | None:
+    if value is None:
+        return None
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(message)
+    return result
 
 
 def _iso(value: datetime | None) -> str | None:

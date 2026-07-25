@@ -170,6 +170,14 @@ def _add_legacy_submission_columns_for_existing_database() -> None:
             connection.execute(text(
                 "ALTER TABLE submissions ADD COLUMN server_min_distance_time_sec FLOAT"
             ))
+        if "server_min_chaser_radius_km" not in existing:
+            connection.execute(text(
+                "ALTER TABLE submissions ADD COLUMN server_min_chaser_radius_km FLOAT"
+            ))
+        if "server_min_target_radius_km" not in existing:
+            connection.execute(text(
+                "ALTER TABLE submissions ADD COLUMN server_min_target_radius_km FLOAT"
+            ))
 
 
 def reset_database(session: Session) -> None:
@@ -177,8 +185,17 @@ def reset_database(session: Session) -> None:
         if table.name != "scenarios":
             session.execute(table.delete())
     session.query(Scenario).filter(Scenario.id != "SC-001").delete(synchronize_session=False)
+    definition_path = BACKEND_ROOT / "docs" / "scenarios" / "small-challenge-v1.json"
+    definition = json.loads(definition_path.read_text(encoding="utf-8"))
     session.query(Scenario).filter(Scenario.id == "SC-001").update(
-        {Scenario.status: "active"},
+        {
+            Scenario.name: definition.get("name", "LEO Interception"),
+            Scenario.description: definition.get("description", ""),
+            Scenario.scenario_json: definition,
+            Scenario.schema_version: int(float(definition.get("schemaVersion", 1))),
+            Scenario.status: "active",
+            Scenario.updated_at: BUILTIN_SCENARIO_TIMESTAMP,
+        },
         synchronize_session=False,
     )
     session.commit()

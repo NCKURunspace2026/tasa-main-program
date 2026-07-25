@@ -255,6 +255,8 @@ export default function Leaderboard() {
           provider: localResult.provider,
           minimumDistanceKm: localResult.minimumDistance,
           minimumDistanceTimeSec: localResult.firstRequiredDistanceTime,
+          minimumChaserRadiusKm: localResult.artifacts?.minimumChaserRadiusKm,
+          minimumTargetRadiusKm: localResult.artifacts?.minimumTargetRadiusKm,
           missionTimeSec: localResult.totalTime,
           totalDeltaVKmPerSec: localResult.totalDeltaV,
         },

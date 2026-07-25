@@ -73,6 +73,8 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         payload.clientValidation.missionTimeSec,
         payload.clientValidation.totalDeltaVKmPerSec,
         0,
+        payload.clientValidation.minimumChaserRadiusKm,
+        payload.clientValidation.minimumTargetRadiusKm,
     )
     if result.scores is None:
         raise ValueError(result.error_message or "Score was not produced.")
@@ -86,6 +88,8 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         status="passed",
         server_min_distance_km=payload.clientValidation.minimumDistanceKm,
         server_min_distance_time_sec=payload.clientValidation.minimumDistanceTimeSec,
+        server_min_chaser_radius_km=payload.clientValidation.minimumChaserRadiusKm,
+        server_min_target_radius_km=payload.clientValidation.minimumTargetRadiusKm,
         mission_time_sec=payload.clientValidation.missionTimeSec,
         total_delta_v_kmps=payload.clientValidation.totalDeltaVKmPerSec,
         distance_score=scores["distanceScore"],
@@ -113,6 +117,8 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
         "officialResults": {
             "minimumDistanceKm": submission.server_min_distance_km,
             "minimumDistanceTimeSec": submission.server_min_distance_time_sec,
+            "minimumChaserRadiusKm": submission.server_min_chaser_radius_km,
+            "minimumTargetRadiusKm": submission.server_min_target_radius_km,
             "missionTimeSec": submission.mission_time_sec,
             "totalDeltaVKmPerSec": submission.total_delta_v_kmps,
             "distanceScore": submission.distance_score,
@@ -133,9 +139,11 @@ def get_submission(session: Session, submission_id: str) -> dict | None:
         "solutionId": submission.solution_id,
         "status": submission.status,
         "officialResults": {
-            "minimumDistanceKm": submission.server_min_distance_km,
-            "minimumDistanceTimeSec": submission.server_min_distance_time_sec,
-            "missionTimeSec": submission.mission_time_sec,
+                "minimumDistanceKm": submission.server_min_distance_km,
+                "minimumDistanceTimeSec": submission.server_min_distance_time_sec,
+                "minimumChaserRadiusKm": submission.server_min_chaser_radius_km,
+                "minimumTargetRadiusKm": submission.server_min_target_radius_km,
+                "missionTimeSec": submission.mission_time_sec,
             "totalDeltaVKmPerSec": submission.total_delta_v_kmps,
             "distanceScore": submission.distance_score,
             "timeScore": submission.time_score,

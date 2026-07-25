@@ -2,9 +2,11 @@ import math
 import re
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db import SessionLocal, initialize_database, reset_database
 from app.main import app
+from app.models import Submission
 
 ADMIN_HEADERS = {"X-Mission-Dashboard-Admin-Token": "test-admin-token"}
 
@@ -66,6 +68,8 @@ def submission_payload():
             "provider": "local-gmat-console",
             "minimumDistanceKm": 4.8,
             "minimumDistanceTimeSec": 1234.5,
+            "minimumChaserRadiusKm": 7000,
+            "minimumTargetRadiusKm": 7000,
             "missionTimeSec": 5000,
             "totalDeltaVKmPerSec": math.hypot(*delta_v),
         },
@@ -144,6 +148,15 @@ def test_delta_v_limit_rejects_single_burn_above_limit():
         assert "per-burn" in response.json()["detail"]
 
 
+def test_spacecraft_radius_below_central_body_is_rejected():
+    payload = submission_payload()
+    payload["clientValidation"]["minimumChaserRadiusKm"] = 6000
+    with TestClient(app) as client:
+        response = client.post("/api/submissions", json=payload)
+        assert response.status_code == 422
+        assert "central body" in response.json()["detail"]
+
+
 def test_existing_solution_revalidation_updates_minimum_distance_time_and_decision_variables():
     payload = submission_payload()
     payload["clientValidation"]["minimumDistanceTimeSec"] = None
@@ -160,6 +173,8 @@ def test_existing_solution_revalidation_updates_minimum_distance_time_and_decisi
                 "provider": "local-gmat-console",
                 "minimumDistanceKm": 4.2,
                 "minimumDistanceTimeSec": 4800,
+                "minimumChaserRadiusKm": 7000,
+                "minimumTargetRadiusKm": 7000,
                 "missionTimeSec": 4800,
                 "totalDeltaVKmPerSec": payload["clientValidation"]["totalDeltaVKmPerSec"],
             },
@@ -251,6 +266,31 @@ def test_scenario_update_recomputes_existing_leaderboard_results():
         detail = client.get(f"/api/solutions/{solution_id}").json()
         assert detail["status"] == "failed"
         assert detail["officialResults"]["officialScore"] is None
+
+
+def test_scenario_update_marks_legacy_rows_missing_radius_metrics_failed():
+    with TestClient(app) as client:
+        created = client.post("/api/submissions", json=submission_payload())
+        assert created.status_code == 201
+        solution_id = created.json()["solutionId"]
+
+        with SessionLocal() as session:
+            submission = session.scalar(select(Submission).where(Submission.solution_id == solution_id))
+            submission.server_min_chaser_radius_km = None
+            submission.server_min_target_radius_km = None
+            submission.client_validation_json.pop("minimumChaserRadiusKm", None)
+            submission.client_validation_json.pop("minimumTargetRadiusKm", None)
+            session.commit()
+
+        response = client.put("/api/scenarios/SC-001", json={
+            "name": "Radius Recompute Scenario",
+            "description": "Forces recompute of legacy rows.",
+            "scenarioJson": scenario_json(),
+        })
+        assert response.status_code == 200
+        assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 0
+        detail = client.get(f"/api/solutions/{solution_id}").json()
+        assert detail["status"] == "failed"
 
 
 def test_scenario_can_be_soft_deleted_with_admin_token():

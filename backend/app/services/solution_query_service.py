@@ -51,6 +51,8 @@ def get_solution_detail(
             "officialScore": submission.total_score,
             "minimumDistance": submission.server_min_distance_km,
             "minimumDistanceTime": submission.server_min_distance_time_sec,
+            "minimumChaserRadius": submission.server_min_chaser_radius_km,
+            "minimumTargetRadius": submission.server_min_target_radius_km,
             "totalDeltaV": submission.total_delta_v_kmps,
             "totalTime": submission.mission_time_sec,
             "burnCount": len(solution.decision_variables_json.get("burns", [])),
@@ -122,6 +124,8 @@ def update_solution_validation(
         payload.clientValidation.missionTimeSec,
         payload.clientValidation.totalDeltaVKmPerSec,
         0,
+        payload.clientValidation.minimumChaserRadiusKm,
+        payload.clientValidation.minimumTargetRadiusKm,
     )
     if result.scores is None:
         raise ValueError(result.error_message or "Score was not produced.")
@@ -134,6 +138,8 @@ def update_solution_validation(
     submission.status = "passed"
     submission.server_min_distance_km = payload.clientValidation.minimumDistanceKm
     submission.server_min_distance_time_sec = payload.clientValidation.minimumDistanceTimeSec
+    submission.server_min_chaser_radius_km = payload.clientValidation.minimumChaserRadiusKm
+    submission.server_min_target_radius_km = payload.clientValidation.minimumTargetRadiusKm
     submission.mission_time_sec = payload.clientValidation.missionTimeSec
     submission.total_delta_v_kmps = payload.clientValidation.totalDeltaVKmPerSec
     submission.distance_score = scores["distanceScore"]

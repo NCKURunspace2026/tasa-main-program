@@ -55,6 +55,8 @@ class Submission(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     server_min_distance_km: Mapped[Optional[float]] = mapped_column(Float)
     server_min_distance_time_sec: Mapped[Optional[float]] = mapped_column(Float)
+    server_min_chaser_radius_km: Mapped[Optional[float]] = mapped_column(Float)
+    server_min_target_radius_km: Mapped[Optional[float]] = mapped_column(Float)
     mission_time_sec: Mapped[Optional[float]] = mapped_column(Float)
     total_delta_v_kmps: Mapped[Optional[float]] = mapped_column(Float)
     distance_score: Mapped[Optional[float]] = mapped_column(Float)

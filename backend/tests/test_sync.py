@@ -200,6 +200,8 @@ def test_passed_solution_can_rebuild_an_empty_replica_and_recomputes_score(tmp_p
         submission = replica.scalar(select(Submission).where(Submission.solution_id == solution_id))
         assert submission.status == "passed"
         assert submission.server_min_distance_time_sec == 1234.5
+        assert submission.server_min_chaser_radius_km == 7000
+        assert submission.server_min_target_radius_km == 7000
         assert submission.total_score is not None
         rebuilt = find_record(replica, "solution", solution_id)
         source = next(record for record in records if record["recordId"] == solution_id)
@@ -227,3 +229,23 @@ def test_imported_scenario_update_recomputes_existing_local_solutions():
         assert submission.status == "failed"
         assert submission.total_score is None
         assert find_record(session, "solution", solution_id) is None
+
+
+def test_imported_scenario_radius_limit_recomputes_existing_local_solutions():
+    with TestClient(app) as client:
+        solution_id = _create_passed_solution(client)
+
+    with SessionLocal() as session:
+        scenario_record = find_record(session, "scenario", "SC-001")
+        stricter = json.loads(json.dumps(scenario_record))
+        stricter["updatedAt"] = "2099-01-01T00:00:00+00:00"
+        stricter["payload"]["updatedAt"] = stricter["updatedAt"]
+        stricter["payload"]["scenarioJson"]["validation"]["minimumSpacecraftRadiusKm"] = 7100
+        unsigned = {key: value for key, value in stricter.items() if key != "contentHash"}
+        stricter["contentHash"] = _content_hash(unsigned)
+
+        result = import_records(session, [stricter])
+        assert result["conflicts"] == []
+        submission = session.scalar(select(Submission).where(Submission.solution_id == solution_id))
+        assert submission.status == "failed"
+        assert "central body" in submission.error_message
