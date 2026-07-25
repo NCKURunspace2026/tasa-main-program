@@ -10,7 +10,11 @@ from ..models import Scenario, SyncEvent
 from ..models.entities import utc_now
 from ..repositories import scenario_repository
 from ..schemas.scenario import ScenarioCreate, ScenarioUpdate
-from .validation_result_service import recompute_scenario_submissions
+from .validation_result_service import (
+    mark_scenario_submissions_for_repair,
+    recompute_scenario_submissions,
+    scenario_dynamics_changed,
+)
 
 
 class ScenarioAlreadyExistsError(ValueError):
@@ -224,20 +228,13 @@ def normalize_scenario(definition: dict) -> dict:
         raise InvalidScenarioError("validation must be a JSON object.")
     if "maximumDeltaVPerBurn" not in validation and "maximumTotalDeltaV" in validation:
         validation["maximumDeltaVPerBurn"] = validation["maximumTotalDeltaV"]
+    validation.pop("maximumTotalDeltaV", None)
+    validation.pop("minimumBurnCount", None)
+    validation.pop("maximumBurnCount", None)
+    validation["requiredFinalDistanceKm"] = 5.0
+    normalized["validation"] = validation
     for key in ("requiredFinalDistanceKm", "maximumDeltaVPerBurn", "maximumMissionTimeSec"):
         _finite_number(validation.get(key), f"validation.{key}", minimum=0)
-    minimum_burns_value = _finite_number(
-        validation.get("minimumBurnCount"), "validation.minimumBurnCount", minimum=1,
-    )
-    maximum_burns_value = _finite_number(
-        validation.get("maximumBurnCount"), "validation.maximumBurnCount", minimum=1,
-    )
-    if not minimum_burns_value.is_integer() or not maximum_burns_value.is_integer():
-        raise InvalidScenarioError("Burn-count limits must be integers.")
-    minimum_burns = int(minimum_burns_value)
-    maximum_burns = int(maximum_burns_value)
-    if minimum_burns > maximum_burns:
-        raise InvalidScenarioError("minimumBurnCount cannot exceed maximumBurnCount.")
     _finite_number(
         validation.get("minimumBurnSeparationSec"),
         "validation.minimumBurnSeparationSec",
@@ -248,13 +245,15 @@ def normalize_scenario(definition: dict) -> dict:
     if not isinstance(score_config, dict):
         raise InvalidScenarioError("scoreConfig must be a JSON object.")
     for key in (
-        "distanceReferenceKm", "distanceDecayKm", "timeReferenceSec", "timeSlope",
-        "deltaVReferenceKmPerSec", "deltaVSlope", "distanceWeight", "timeWeight",
-        "deltaVWeight",
+        "timeReferenceSec", "timeSlope", "deltaVReferenceKmPerSec", "deltaVSlope",
     ):
         value = _finite_number(score_config.get(key), f"scoreConfig.{key}", minimum=0)
-        if key in {"distanceDecayKm", "timeSlope", "deltaVSlope"} and value <= 0:
+        if key in {"timeSlope", "deltaVSlope"} and value <= 0:
             raise InvalidScenarioError(f"scoreConfig.{key} must be greater than zero.")
+    normalized["scoreConfig"] = {
+        key: score_config[key]
+        for key in ("timeReferenceSec", "timeSlope", "deltaVReferenceKmPerSec", "deltaVSlope")
+    }
     return normalized
 
 
@@ -315,6 +314,9 @@ def update_scenario(
     if scenario is None:
         return None
     definition = normalize_scenario(payload.scenarioJson)
+    dynamics_changed = scenario_dynamics_changed(
+        normalize_scenario(scenario.scenario_json), definition,
+    )
     scenario.name = payload.name.strip()
     scenario.description = payload.description.strip()
     scenario.scenario_json = definition
@@ -322,7 +324,12 @@ def update_scenario(
     scenario.updated_at = utc_now()
     scenario_repository.update(session, scenario)
     session.add(SyncEvent(record_type="scenario", record_id=scenario.id))
-    recompute_scenario_submissions(session, scenario, updated_at=scenario.updated_at)
+    if dynamics_changed:
+        mark_scenario_submissions_for_repair(
+            session, scenario, updated_at=scenario.updated_at,
+        )
+    else:
+        recompute_scenario_submissions(session, scenario, updated_at=scenario.updated_at)
     session.commit()
     return _serialize(scenario)
 

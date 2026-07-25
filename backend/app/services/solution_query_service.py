@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import math
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Scenario, Solution, Submission, SyncEvent
@@ -28,16 +28,24 @@ def get_solution_detail(
         return None
     rank = None
     if submission.status == "passed":
-        rank = 1 + session.scalar(
-            select(func.count(Submission.id))
+        ranked_solution_ids = session.scalars(
+            select(Solution.id)
+            .select_from(Submission)
             .join(Solution, Solution.id == Submission.solution_id)
             .where(
                 Solution.scenario_id == solution.scenario_id,
                 Solution.deleted_at.is_(None),
                 Submission.status == "passed",
-                Submission.total_score > submission.total_score,
             )
-        )
+            .order_by(
+                Submission.total_score.desc(),
+                Submission.server_min_distance_km.asc(),
+                Submission.total_delta_v_kmps.asc(),
+                Submission.mission_time_sec.asc(),
+                Submission.created_at.asc(),
+            )
+        ).all()
+        rank = ranked_solution_ids.index(solution.id) + 1
     return {
         "solutionId": solution.id,
         "submissionId": submission.id,
@@ -74,11 +82,23 @@ def set_solution_deleted(
         return None
     solution.deleted_at = datetime.now(timezone.utc) if deleted else None
     solution.updated_at = utc_now()
+    session.add(SyncEvent(record_type="solution", record_id=solution.id))
     session.commit()
     return {
         "solutionId": solution.id,
         "deletedAt": solution.deleted_at.isoformat() if solution.deleted_at else None,
     }
+
+
+def rename_solution(session: Session, solution_id: str, name: str) -> dict | None:
+    solution = find_by_id(session, solution_id)
+    if solution is None:
+        return None
+    solution.name = name
+    solution.updated_at = utc_now()
+    session.add(SyncEvent(record_type="solution", record_id=solution.id))
+    session.commit()
+    return get_solution_detail(session, solution.id)
 
 
 def update_solution_validation(

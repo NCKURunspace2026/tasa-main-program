@@ -1,3 +1,4 @@
+import json
 import math
 import re
 
@@ -31,21 +32,14 @@ def scenario_json():
         "validation": {
             "maximumMissionTimeSec": 20000,
             "requiredFinalDistanceKm": 5,
-            "maximumTotalDeltaV": 1.5,
-            "minimumBurnCount": 1,
-            "maximumBurnCount": 5,
+            "maximumDeltaVPerBurn": 1.5,
             "minimumBurnSeparationSec": 100,
         },
         "scoreConfig": {
-            "distanceReferenceKm": 5,
-            "distanceDecayKm": 100,
             "timeReferenceSec": 5000,
             "timeSlope": 0.001,
             "deltaVReferenceKmPerSec": 0.5,
             "deltaVSlope": 5,
-            "distanceWeight": 50,
-            "timeWeight": 25,
-            "deltaVWeight": 25,
         },
     }
 
@@ -148,6 +142,37 @@ def test_delta_v_limit_rejects_single_burn_above_limit():
         assert "per-burn" in response.json()["detail"]
 
 
+def test_scenario_does_not_limit_the_number_of_burns():
+    payload = submission_payload()
+    payload["solution"]["decisionVariables"]["burns"] = [
+        {"deltaV": [0.1, 0, 0], "timeToNextBurn": 100}
+        for _ in range(5)
+    ] + [{"deltaV": [0.1, 0, 0]}]
+    payload["clientValidation"]["missionTimeSec"] = 5500
+    payload["clientValidation"]["totalDeltaVKmPerSec"] = 0.6
+    with TestClient(app) as client:
+        response = client.post("/api/submissions", json=payload)
+        assert response.status_code == 201
+
+
+def test_scenario_normalization_removes_legacy_burn_count_limits():
+    definition = scenario_json()
+    definition["validation"]["minimumBurnCount"] = 1
+    definition["validation"]["maximumBurnCount"] = 5
+    definition["validation"]["requiredFinalDistanceKm"] = 10
+    with TestClient(app) as client:
+        created = client.post("/api/scenarios", json={
+            "scenarioId": "SC-888",
+            "name": "Unlimited burns",
+            "scenarioJson": definition,
+        })
+        assert created.status_code == 201
+        validation = created.json()["scenarioJson"]["validation"]
+        assert validation["requiredFinalDistanceKm"] == 5
+        assert "minimumBurnCount" not in validation
+        assert "maximumBurnCount" not in validation
+
+
 def test_spacecraft_radius_below_central_body_is_rejected():
     payload = submission_payload()
     payload["clientValidation"]["minimumChaserRadiusKm"] = 6000
@@ -178,7 +203,7 @@ def test_existing_solution_revalidation_updates_minimum_distance_time_and_decisi
                 "missionTimeSec": 4800,
                 "totalDeltaVKmPerSec": payload["clientValidation"]["totalDeltaVKmPerSec"],
             },
-        })
+        }, headers=ADMIN_HEADERS)
         assert repaired.status_code == 200
         detail = repaired.json()
         assert detail["solutionId"] == solution_id
@@ -187,6 +212,31 @@ def test_existing_solution_revalidation_updates_minimum_distance_time_and_decisi
         assert detail["officialResults"]["minimumDistanceTime"] == 4800
         leaderboard = client.get("/api/scenarios/SC-001/leaderboard").json()
         assert leaderboard["items"][0]["minimumDistanceTime"] == 4800
+
+
+def test_solution_name_can_be_edited_without_changing_validated_fields():
+    with TestClient(app) as client:
+        created = client.post("/api/submissions", json=submission_payload()).json()
+        solution_id = created["solutionId"]
+        before = client.get(f"/api/solutions/{solution_id}").json()
+
+        renamed = client.patch(
+            f"/api/solutions/{solution_id}/name",
+            json={"name": "  Corrected solution name  "},
+            headers=ADMIN_HEADERS,
+        )
+        assert renamed.status_code == 200
+        detail = renamed.json()
+        assert detail["solution"]["name"] == "Corrected solution name"
+        assert detail["finalDecisionVariables"] == before["finalDecisionVariables"]
+        assert detail["officialResults"] == before["officialResults"]
+
+        forbidden = client.patch(
+            f"/api/solutions/{solution_id}/name",
+            json={"name": "Unsafe edit", "decisionVariables": {"tWait": 10}},
+            headers=ADMIN_HEADERS,
+        )
+        assert forbidden.status_code == 422
 
 
 def test_scenario_publish_normalizes_force_model_and_physical_properties():
@@ -221,6 +271,63 @@ def test_scenario_publish_normalizes_force_model_and_physical_properties():
         assert response.status_code == 422
 
 
+def test_scenario_viewer_fields_round_trip_through_sqlite():
+    definition = scenario_json()
+    definition["forceModel"] = {
+        "centralBody": "Earth",
+        "gravity": {"enabled": True, "degree": 6, "order": 3},
+        "pointMasses": ["Sun", "Luna", "Mars"],
+        "drag": {"enabled": True, "model": "MSISE90"},
+        "solarRadiationPressure": {"enabled": True},
+        "relativisticCorrection": {"enabled": True},
+    }
+    definition["propagator"] = {
+        "integrator": "PrinceDormand78",
+        "initialStepSec": 2,
+        "maxStepSec": 4,
+        "minStepSec": 0.01,
+        "accuracy": 1e-10,
+    }
+    definition["validation"] = {
+        "requiredFinalDistanceKm": 9,
+        "maximumDeltaVPerBurn": 2.25,
+        "maximumMissionTimeSec": 25000,
+        "minimumBurnSeparationSec": 75,
+        "minimumBurnCount": 2,
+        "maximumBurnCount": 3,
+    }
+    definition["scoreConfig"] = {
+        "timeReferenceSec": 6000,
+        "timeSlope": 0.002,
+        "deltaVReferenceKmPerSec": 0.75,
+        "deltaVSlope": 8,
+    }
+    with TestClient(app) as client:
+        created = client.post("/api/scenarios", json={
+            "scenarioId": "SC-777",
+            "name": "Round trip",
+            "description": "Every editable field",
+            "scenarioJson": definition,
+        })
+        assert created.status_code == 201
+        persisted = client.get("/api/scenarios/SC-777").json()["scenarioJson"]
+        assert persisted["forceModel"]["gravity"] == {
+            "type": "spherical-harmonic", "enabled": True, "degree": 6, "order": 3,
+        }
+        assert persisted["forceModel"]["pointMasses"] == ["Sun", "Luna", "Mars"]
+        assert persisted["forceModel"]["drag"] == {"enabled": True, "model": "MSISE90"}
+        assert persisted["forceModel"]["solarRadiationPressure"]["enabled"] is True
+        assert persisted["forceModel"]["relativisticCorrection"]["enabled"] is True
+        assert persisted["propagator"] == definition["propagator"]
+        assert persisted["validation"] == {
+            "requiredFinalDistanceKm": 5.0,
+            "maximumDeltaVPerBurn": 2.25,
+            "maximumMissionTimeSec": 25000,
+            "minimumBurnSeparationSec": 75,
+        }
+        assert persisted["scoreConfig"] == definition["scoreConfig"]
+
+
 def test_scenario_update_can_rename_existing_scenario():
     with TestClient(app) as client:
         response = client.put("/api/scenarios/SC-001", json={
@@ -252,11 +359,11 @@ def test_scenario_update_recomputes_existing_leaderboard_results():
         assert client.get(f"/api/scenarios/{scenario_id}/leaderboard").json()["total"] == 1
 
         updated_definition = scenario_json()
-        updated_definition["validation"]["requiredFinalDistanceKm"] = 4.0
-        updated_definition["scoreConfig"]["distanceReferenceKm"] = 4.0
+        updated_definition["validation"]["maximumMissionTimeSec"] = 4000.0
+        updated_definition["scoreConfig"]["timeReferenceSec"] = 4000.0
         response = client.put(f"/api/scenarios/{scenario_id}", json={
             "name": "Stricter Scenario",
-            "description": "Old close approaches no longer pass.",
+            "description": "Solutions above the new mission time no longer pass.",
             "scenarioJson": updated_definition,
         })
         assert response.status_code == 200
@@ -268,7 +375,56 @@ def test_scenario_update_recomputes_existing_leaderboard_results():
         assert detail["officialResults"]["officialScore"] is None
 
 
-def test_scenario_update_marks_legacy_rows_missing_radius_metrics_failed():
+def test_score_parameter_update_recomputes_without_requiring_gmat_repair():
+    with TestClient(app) as client:
+        created = client.post("/api/submissions", json=submission_payload()).json()
+        solution_id = created["solutionId"]
+        before = client.get(f"/api/solutions/{solution_id}").json()
+        scenario = client.get("/api/scenarios/SC-001").json()
+        definition = scenario["scenarioJson"]
+        definition["scoreConfig"]["timeReferenceSec"] = 8000
+
+        response = client.put("/api/scenarios/SC-001", json={
+            "name": scenario["name"],
+            "description": scenario["description"],
+            "scenarioJson": definition,
+        })
+        assert response.status_code == 200
+        after = client.get(f"/api/solutions/{solution_id}").json()
+        assert after["status"] == "passed"
+        assert after["officialResults"]["officialScore"] != before["officialResults"]["officialScore"]
+
+
+def test_ml_export_is_filtered_to_the_selected_scenario():
+    with TestClient(app) as client:
+        created = client.post("/api/submissions", json=submission_payload()).json()
+        solution_id = created["solutionId"]
+        selected = client.get("/api/data/export?format=jsonl&scope=ml&scenarioId=SC-001")
+        other = client.get("/api/data/export?format=jsonl&scope=ml&scenarioId=SC-999")
+        assert solution_id in selected.text
+        assert '"burn_norms_kmps"' in selected.text
+        assert other.text == ""
+
+
+def test_full_export_includes_a_scenario_without_solutions():
+    definition = scenario_json()
+    with TestClient(app) as client:
+        created = client.post("/api/scenarios", json={
+            "name": "Empty Scenario",
+            "scenarioJson": definition,
+        })
+        assert created.status_code == 201
+        scenario_id = created.json()["scenarioId"]
+        rows = [
+            json.loads(line)
+            for line in client.get("/api/data/export?format=jsonl&scope=all").text.splitlines()
+        ]
+        empty = next(row for row in rows if row["scenario_id"] == scenario_id)
+        assert empty["solution_id"] is None
+        assert empty["submission_id"] is None
+
+
+def test_scenario_dynamics_update_marks_existing_solution_for_repair():
     with TestClient(app) as client:
         created = client.post("/api/submissions", json=submission_payload())
         assert created.status_code == 201
@@ -288,9 +444,17 @@ def test_scenario_update_marks_legacy_rows_missing_radius_metrics_failed():
             "scenarioJson": scenario_json(),
         })
         assert response.status_code == 200
-        assert client.get("/api/scenarios/SC-001/leaderboard").json()["total"] == 0
+        leaderboard = client.get("/api/scenarios/SC-001/leaderboard").json()
+        assert leaderboard["total"] == 1
+        assert leaderboard["items"][0]["status"] == "needs_repair"
+        assert leaderboard["items"][0]["officialScore"] is None
         detail = client.get(f"/api/solutions/{solution_id}").json()
-        assert detail["status"] == "failed"
+        assert detail["status"] == "needs_repair"
+
+        initialize_database()
+        restarted = client.get(f"/api/solutions/{solution_id}").json()
+        assert restarted["status"] == "needs_repair"
+        assert restarted["officialResults"]["officialScore"] is None
 
 
 def test_scenario_can_be_soft_deleted_with_admin_token():

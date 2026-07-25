@@ -175,6 +175,7 @@
 
 .solution-remove-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.solution-rename-button,
 .solution-repair-button {
   min-height: 34px;
   padding: 0 12px;
@@ -188,6 +189,51 @@
   cursor: pointer;
 }
 
+.solution-detail-status.is-warning {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+}
+
+.solution-download-button {
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  cursor: pointer;
+}
+
+.solution-download-button:hover:not(:disabled) {
+  border-color: #60a5fa;
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.solution-download-button:focus-visible {
+  outline: 2px solid #78b7f2;
+  outline-offset: 2px;
+}
+
+.solution-download-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.solution-download-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.solution-rename-button:disabled,
 .solution-repair-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .solution-detail-content {
@@ -788,11 +834,13 @@
   line-height: 1.6;
 }
 
+.leaderboard-name-field,
 .leaderboard-password-field {
   display: grid;
   gap: 7px;
 }
 
+.leaderboard-name-field span,
 .leaderboard-password-field span {
   color: #94a3b8;
   font-size: 12px;
@@ -801,6 +849,7 @@
   text-transform: uppercase;
 }
 
+.leaderboard-name-field input,
 .leaderboard-password-field input {
   width: 100%;
   min-height: 44px;
@@ -816,16 +865,19 @@
   caret-color: #78b7f2;
 }
 
+.leaderboard-name-field input::placeholder,
 .leaderboard-password-field input::placeholder {
   color: #64748b;
 }
 
+.leaderboard-name-field input:focus,
 .leaderboard-password-field input:focus {
   border-color: rgba(120, 183, 242, 0.7);
   outline: 2px solid rgba(120, 183, 242, 0.16);
   outline-offset: 1px;
 }
 
+.leaderboard-name-field input::selection,
 .leaderboard-password-field input::selection {
   background: rgba(120, 183, 242, 0.35);
 }

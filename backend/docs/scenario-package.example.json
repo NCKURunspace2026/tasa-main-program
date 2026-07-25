@@ -57,22 +57,15 @@
     },
     "validation": {
       "requiredFinalDistanceKm": 5,
-      "maximumTotalDeltaV": 1.5,
+      "maximumDeltaVPerBurn": 1.5,
       "maximumMissionTimeSec": 20000,
-      "minimumBurnCount": 1,
-      "maximumBurnCount": 5,
       "minimumBurnSeparationSec": 100
     },
     "scoreConfig": {
-      "distanceReferenceKm": 5,
-      "distanceDecayKm": 100,
       "timeReferenceSec": 5000,
       "timeSlope": 0.001,
       "deltaVReferenceKmPerSec": 0.5,
-      "deltaVSlope": 5,
-      "distanceWeight": 50,
-      "timeWeight": 25,
-      "deltaVWeight": 25
+      "deltaVSlope": 5
     }
   }
 }

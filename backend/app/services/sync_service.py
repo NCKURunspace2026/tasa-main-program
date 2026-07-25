@@ -23,13 +23,15 @@ from ..schemas.submission import ClientValidationInput, DecisionVariablesInput
 from .scenario_service import normalize_scenario
 from .validation_result_service import (
     apply_recomputed_submission,
+    mark_scenario_submissions_for_repair,
     recompute_scenario_submissions,
     recompute_submission_result,
+    scenario_dynamics_changed,
 )
 
 
 SYNC_SCHEMA_VERSION = 1
-SYNCABLE_SUBMISSION_STATUS = "passed"
+SYNCABLE_SUBMISSION_STATUSES = ("passed", "needs_repair")
 DEFAULT_PEER_URL = "https://missiondashboard.fastapicloud.dev/api"
 
 
@@ -87,7 +89,7 @@ def build_records(session: Session, updated_after: datetime | None = None) -> li
     solution_query = (
         select(Solution, Submission)
         .join(Submission, Submission.solution_id == Solution.id)
-        .where(Submission.status == SYNCABLE_SUBMISSION_STATUS)
+        .where(Submission.status.in_(SYNCABLE_SUBMISSION_STATUSES))
     )
     if updated_after is not None:
         solution_query = solution_query.where(or_(
@@ -111,7 +113,7 @@ def find_record(session: Session, record_type: str, record_id: str) -> dict | No
         submission = session.scalar(
             select(Submission).where(
                 Submission.solution_id == solution.id,
-                Submission.status == SYNCABLE_SUBMISSION_STATUS,
+                Submission.status.in_(SYNCABLE_SUBMISSION_STATUSES),
             )
         )
         return _solution_record(solution, submission) if submission else None
@@ -393,11 +395,23 @@ def _sync_error_message(error: Exception) -> str:
 
 
 def _scenario_record(scenario: Scenario) -> dict:
+    scenario_json = json.loads(json.dumps(scenario.scenario_json))
+    validation = scenario_json.setdefault("validation", {})
+    validation.setdefault("minimumBurnCount", 1)
+    validation.setdefault("maximumBurnCount", 2147483647)
+    score_config = scenario_json.setdefault("scoreConfig", {})
+    score_config.update({
+        "distanceReferenceKm": 5,
+        "distanceDecayKm": 100,
+        "distanceWeight": 50,
+        "timeWeight": 25,
+        "deltaVWeight": 25,
+    })
     payload = {
         "scenarioId": scenario.id,
         "name": scenario.name,
         "description": scenario.description,
-        "scenarioJson": scenario.scenario_json,
+        "scenarioJson": scenario_json,
         "schemaVersion": scenario.schema_version,
         "status": scenario.status,
         "createdAt": _iso(scenario.created_at),
@@ -435,6 +449,7 @@ def _solution_record(solution: Solution, submission: Submission) -> dict:
             "deltaVScore": submission.delta_v_score,
             "penaltyScore": submission.penalty_score,
             "totalScore": submission.total_score,
+            "errorMessage": submission.error_message,
             "createdAt": _iso(submission.created_at),
             "updatedAt": _iso(submission.updated_at),
             "validatedAt": _iso(submission.validated_at),
@@ -490,6 +505,9 @@ def _import_scenario(session: Session, record: dict) -> None:
         raise ValueError("Scenario record ID does not match its payload.")
     definition = normalize_scenario(payload["scenarioJson"])
     scenario = session.get(Scenario, record["recordId"])
+    previous_definition = (
+        normalize_scenario(scenario.scenario_json) if scenario is not None else definition
+    )
     if scenario is None:
         scenario = Scenario(id=record["recordId"], name=payload["name"], scenario_json={})
         session.add(scenario)
@@ -500,12 +518,17 @@ def _import_scenario(session: Session, record: dict) -> None:
     scenario.status = payload.get("status", "active")
     scenario.created_at = _datetime(payload["createdAt"])
     scenario.updated_at = _datetime(payload["updatedAt"])
-    recompute_scenario_submissions(
-        session,
-        scenario,
-        updated_at=scenario.updated_at,
-        emit_sync_events=False,
-    )
+    if scenario_dynamics_changed(previous_definition, definition):
+        mark_scenario_submissions_for_repair(
+            session, scenario, updated_at=scenario.updated_at, emit_sync_events=False,
+        )
+    else:
+        recompute_scenario_submissions(
+            session,
+            scenario,
+            updated_at=scenario.updated_at,
+            emit_sync_events=False,
+        )
 
 
 def _import_solution(session: Session, record: dict) -> None:
@@ -575,7 +598,7 @@ def _import_solution(session: Session, record: dict) -> None:
         server_metrics[0],
         server_metrics[1],
         server_metrics[2],
-        float(submission_payload.get("penaltyScore", 0)),
+        float(submission_payload.get("penaltyScore") or 0),
         server_minimum_chaser_radius,
         server_minimum_target_radius,
     )
@@ -605,7 +628,10 @@ def _import_solution(session: Session, record: dict) -> None:
         session.add(submission)
     submission.solution_id = solution.id
     submission.client_validation_json = client_validation.model_dump(mode="json")
-    submission.status = SYNCABLE_SUBMISSION_STATUS
+    synchronized_status = submission_payload.get("status", "passed")
+    if synchronized_status not in SYNCABLE_SUBMISSION_STATUSES:
+        raise ValueError("Synchronized submission status is unsupported.")
+    submission.status = synchronized_status
     submission.server_min_distance_km = submission_payload["serverMinimumDistanceKm"]
     submission.server_min_distance_time_sec = server_minimum_time
     submission.server_min_chaser_radius_km = server_minimum_chaser_radius
@@ -620,15 +646,16 @@ def _import_solution(session: Session, record: dict) -> None:
     submission.created_at = _datetime(submission_payload["createdAt"])
     submission.updated_at = _datetime(submission_payload["updatedAt"])
     submission.validated_at = _datetime(submission_payload["validatedAt"])
-    submission.error_message = None
-    apply_recomputed_submission(
-        submission,
-        recomputed,
-        updated_at=max(
-            _as_utc(value) for value in (submission.updated_at, scenario.updated_at)
-            if value is not None
-        ),
-    )
+    submission.error_message = submission_payload.get("errorMessage")
+    if synchronized_status == "passed":
+        apply_recomputed_submission(
+            submission,
+            recomputed,
+            updated_at=max(
+                _as_utc(value) for value in (submission.updated_at, scenario.updated_at)
+                if value is not None
+            ),
+        )
 
 
 def _datetime(value: str | None) -> datetime | None:

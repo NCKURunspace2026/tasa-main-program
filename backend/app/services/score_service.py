@@ -15,9 +15,7 @@ def calculate_score(
     penalty_score: float = 0,
 ) -> dict:
     required = (
-        "distanceReferenceKm", "distanceDecayKm", "timeReferenceSec",
-        "timeSlope", "deltaVReferenceKmPerSec", "deltaVSlope",
-        "distanceWeight", "timeWeight", "deltaVWeight",
+        "timeReferenceSec", "timeSlope", "deltaVReferenceKmPerSec", "deltaVSlope",
     )
     missing = [key for key in required if key not in score_config]
     if missing:
@@ -26,20 +24,14 @@ def calculate_score(
     values = {key: float(score_config[key]) for key in required}
     if not all(math.isfinite(value) for value in values.values()):
         raise InvalidScoreConfigError("scoreConfig values must be finite.")
-    if values["distanceDecayKm"] <= 0:
-        raise InvalidScoreConfigError("distanceDecayKm must be greater than zero.")
-
-    distance_score = (
-        values["distanceWeight"]
-        if minimum_distance_km <= values["distanceReferenceKm"]
-        else 0.0
-    )
-    time_score = values["timeWeight"] / (
+    scored_distance_km = max(minimum_distance_km, 5.0)
+    distance_score = 50.0 * math.exp(-(scored_distance_km - 5.0) / 100.0)
+    time_score = 25.0 / (
         1 + math.exp(_clamp_exponent(
             values["timeSlope"] * (mission_time_sec - values["timeReferenceSec"])
         ))
     )
-    delta_v_score = values["deltaVWeight"] / (
+    delta_v_score = 25.0 / (
         1 + math.exp(_clamp_exponent(
             values["deltaVSlope"] * (
                 total_delta_v_kmps - values["deltaVReferenceKmPerSec"]

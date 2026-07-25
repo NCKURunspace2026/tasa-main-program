@@ -18,7 +18,6 @@ import {
 
 const sections = [
   ["connection", "Connection"],
-  ["security", "Security"],
   ["updates", "App Updates"],
   ["validation", "Local GMAT"],
   ["scenario-view", "Scenario Viewer"],
@@ -49,21 +48,13 @@ const emptyScenarioLimits = {
   maxStepSec: "",
   minStepSec: "",
   accuracy: "",
-  requiredFinalDistanceKm: "",
   maximumDeltaVPerBurn: "",
   maximumMissionTimeSec: "",
-  minimumBurnCount: "",
-  maximumBurnCount: "",
   minimumBurnSeparationSec: "",
-  distanceReferenceKm: "",
-  distanceDecayKm: "",
   timeReferenceSec: "",
   timeSlope: "",
   deltaVReferenceKmPerSec: "",
   deltaVSlope: "",
-  distanceWeight: "",
-  timeWeight: "",
-  deltaVWeight: "",
 };
 
 const starterScenarioDefinition = {
@@ -115,20 +106,13 @@ const starterScenarioDefinition = {
     requiredFinalDistanceKm: 5,
     maximumDeltaVPerBurn: 1.5,
     maximumMissionTimeSec: 20000,
-    minimumBurnCount: 1,
-    maximumBurnCount: 5,
     minimumBurnSeparationSec: 100,
   },
   scoreConfig: {
-    distanceReferenceKm: 5,
-    distanceDecayKm: 100,
     timeReferenceSec: 5000,
     timeSlope: 0.001,
     deltaVReferenceKmPerSec: 0.5,
     deltaVSlope: 10,
-    distanceWeight: 50,
-    timeWeight: 25,
-    deltaVWeight: 25,
   },
 };
 
@@ -159,21 +143,14 @@ export default function Settings() {
   const [scenarioDetails, setScenarioDetails] = useState({ name: "", description: "" });
   const [scenarioLimits, setScenarioLimits] = useState(emptyScenarioLimits);
   const [isSavingScenario, setIsSavingScenario] = useState(false);
-  const [includeArchivedExport, setIncludeArchivedExport] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [startupSyncStatus, setStartupSyncStatus] = useState(null);
   const [scriptPreview, setScriptPreview] = useState("");
   const [scriptPreviewError, setScriptPreviewError] = useState("");
   const [showScenarioFormat, setShowScenarioFormat] = useState(false);
   const [scenarioRemoval, setScenarioRemoval] = useState(null);
-  const [scenarioRemovalPassword, setScenarioRemovalPassword] = useState("");
+  const [scenarioRemovalConfirmation, setScenarioRemovalConfirmation] = useState("");
   const [isRemovingScenario, setIsRemovingScenario] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    configured: false,
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
 
   useEffect(() => {
     let isCurrent = true;
@@ -248,18 +225,6 @@ export default function Settings() {
     };
   }, []);
 
-  useEffect(() => {
-    let isCurrent = true;
-    window.missionDashboardDesktop?.getAdminPasswordStatus?.()
-      .then((status) => {
-        if (isCurrent) {
-          setPasswordForm((current) => ({ ...current, configured: status.configured }));
-        }
-      })
-      .catch(() => {});
-    return () => { isCurrent = false; };
-  }, []);
-
   function updateSetting(event) {
     const { name, value, type, checked } = event.target;
     setSettings((current) => ({
@@ -268,18 +233,33 @@ export default function Settings() {
     }));
   }
 
-  async function saveSettings() {
+  async function saveSyncSettings() {
     try {
       await updateSyncSettings({
         peerUrl: settings.cloudAddress,
         enabled: settings.syncEnabled,
       });
+      setMessage("Synchronization settings saved on this device.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function saveGmatSettings() {
+    try {
+      if (!window.missionDashboardDesktop?.saveGmatConfig) {
+        throw new Error("Local GMAT settings require the Electron app.");
+      }
+      const timeoutSeconds = Number(settings.validationTimeout);
+      if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+        throw new Error("Maximum validation time must be greater than zero.");
+      }
       await window.missionDashboardDesktop?.saveGmatConfig?.({
         gmatInstallationPath: settings.gmatExecutablePath.trim(),
-        timeoutMs: Number(settings.validationTimeout) * 1000,
+        timeoutMs: timeoutSeconds * 1000,
         keepTemporaryFiles: settings.keepTemporaryFiles,
       });
-      setMessage("Settings saved on this device.");
+      setMessage("Local GMAT settings saved on this device.");
     } catch (error) {
       setMessage(error.message);
     }
@@ -338,15 +318,6 @@ export default function Settings() {
     setMessage("Scenario JSON package template downloaded.");
   }
 
-  function loadScenarioFormat() {
-    setScenarioForm({
-      name: scenarioPackageTemplate.name,
-      description: scenarioPackageTemplate.description,
-      scenarioJson: JSON.stringify(scenarioPackageTemplate.scenarioJson, null, 2),
-    });
-    setMessage("Scenario template loaded into the publish form.");
-  }
-
   async function previewGmatScript() {
     const scenario = scenarios.find((item) => item.scenarioId === selectedScenarioId);
     if (!scenario) {
@@ -379,33 +350,6 @@ export default function Settings() {
     } catch (error) {
       setScriptPreview("");
       setScriptPreviewError(error.message);
-    }
-  }
-
-  function updatePasswordField(event) {
-    setPasswordForm((current) => ({ ...current, [event.target.name]: event.target.value }));
-  }
-
-  async function saveAdminPassword(event) {
-    event.preventDefault();
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setMessage("The new passwords do not match.");
-      return;
-    }
-    try {
-      await window.missionDashboardDesktop.setAdminPassword({
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword,
-      });
-      setPasswordForm({
-        configured: true,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-      setMessage("Device administration password saved.");
-    } catch (error) {
-      setMessage(error.message);
     }
   }
 
@@ -454,6 +398,9 @@ export default function Settings() {
       setScenarios((current) => [...current, created].sort(
         (left, right) => left.scenarioId.localeCompare(right.scenarioId),
       ));
+      setSelectedScenarioId(created.scenarioId);
+      setScenarioDetails({ name: created.name, description: created.description });
+      setScenarioLimits(readScenarioLimits(created.scenarioJson));
       setScenarioForm(newScenarioForm());
       setMessage(`${created.scenarioId} published.`);
       runDataSync().catch(() => {});
@@ -488,6 +435,8 @@ export default function Settings() {
     const scenarioId = event.target.value;
     const scenario = scenarios.find((item) => item.scenarioId === scenarioId);
     setSelectedScenarioId(scenarioId);
+    setScenarioRemoval(null);
+    setScenarioRemovalConfirmation("");
     setScenarioDetails({
       name: scenario?.name ?? "",
       description: scenario?.description ?? "",
@@ -518,6 +467,9 @@ export default function Settings() {
     if (scenarioLimits.dragEnabled && scenarioLimits.centralBody !== "Earth") {
       throw new Error("The available atmosphere models currently support Earth only.");
     }
+    const preservedPointMasses = (scenarioJson.forceModel?.pointMasses ?? []).filter(
+      (body) => body !== "Sun" && body !== "Luna",
+    );
     scenarioJson.forceModel = {
       centralBody: scenarioLimits.centralBody,
       gravity: {
@@ -527,6 +479,7 @@ export default function Settings() {
         order: gravityOrder,
       },
       pointMasses: [
+        ...preservedPointMasses,
         ...(scenarioLimits.pointMassSun ? ["Sun"] : []),
         ...(scenarioLimits.pointMassLuna ? ["Luna"] : []),
       ],
@@ -551,30 +504,21 @@ export default function Settings() {
     };
     scenarioJson.validation = {
       ...scenarioJson.validation,
-      requiredFinalDistanceKm: nonNegativeNumber(scenarioLimits.requiredFinalDistanceKm, "Required final distance"),
+      requiredFinalDistanceKm: 5,
       maximumDeltaVPerBurn: positiveNumber(scenarioLimits.maximumDeltaVPerBurn, "Maximum Delta-V per burn"),
       maximumMissionTimeSec: positiveNumber(scenarioLimits.maximumMissionTimeSec, "Maximum mission time"),
-      minimumBurnCount: positiveInteger(scenarioLimits.minimumBurnCount, "Minimum burn count"),
-      maximumBurnCount: positiveInteger(scenarioLimits.maximumBurnCount, "Maximum burn count"),
       minimumBurnSeparationSec: nonNegativeNumber(scenarioLimits.minimumBurnSeparationSec, "Minimum burn separation"),
     };
+    delete scenarioJson.validation.minimumBurnCount;
+    delete scenarioJson.validation.maximumBurnCount;
     scenarioJson.scoreConfig = {
-      ...scenarioJson.scoreConfig,
-      distanceReferenceKm: nonNegativeNumber(scenarioLimits.distanceReferenceKm, "Distance reference"),
-      distanceDecayKm: positiveNumber(scenarioLimits.distanceDecayKm, "Distance decay"),
       timeReferenceSec: nonNegativeNumber(scenarioLimits.timeReferenceSec, "Time reference"),
       timeSlope: positiveNumber(scenarioLimits.timeSlope, "Time slope"),
       deltaVReferenceKmPerSec: nonNegativeNumber(scenarioLimits.deltaVReferenceKmPerSec, "Delta-V reference"),
       deltaVSlope: positiveNumber(scenarioLimits.deltaVSlope, "Delta-V slope"),
-      distanceWeight: nonNegativeNumber(scenarioLimits.distanceWeight, "Distance weight"),
-      timeWeight: nonNegativeNumber(scenarioLimits.timeWeight, "Time weight"),
-      deltaVWeight: nonNegativeNumber(scenarioLimits.deltaVWeight, "Delta-V weight"),
     };
     if (scenarioJson.propagator.minStepSec > scenarioJson.propagator.maxStepSec) {
       throw new Error("Minimum step cannot be greater than maximum step.");
-    }
-    if (scenarioJson.validation.minimumBurnCount > scenarioJson.validation.maximumBurnCount) {
-      throw new Error("Minimum burn count cannot be greater than maximum burn count.");
     }
     return scenarioJson;
   }
@@ -592,13 +536,26 @@ export default function Settings() {
         description: scenarioDetails.description.trim(),
         scenarioJson,
       });
-      setScenarios((current) => current.map((item) => (
-        item.scenarioId === updated.scenarioId ? updated : item
-      )));
-      setScenarioDetails({ name: updated.name, description: updated.description });
-      setScenarioLimits(readScenarioLimits(updated.scenarioJson));
-      setMessage(`${updated.scenarioId} details and limits saved to this device.`);
-      runDataSync().catch(() => {});
+      let syncMessage = "";
+      try {
+        const syncResult = await runDataSync();
+        if (syncResult.status === "error") throw new Error(syncResult.lastError);
+        if (syncResult.conflicts?.length) {
+          syncMessage = ` Synchronization reported ${syncResult.conflicts.length} conflict(s).`;
+        }
+      } catch (syncError) {
+        syncMessage = ` Saved locally; synchronization failed: ${syncError.message}`;
+      }
+      const refreshed = await getScenarios();
+      const persisted = refreshed.items.find((item) => item.scenarioId === updated.scenarioId);
+      if (!persisted) throw new Error("The saved Scenario could not be read back from SQLite.");
+      setScenarios(refreshed.items);
+      setScenarioDetails({ name: persisted.name, description: persisted.description });
+      setScenarioLimits(readScenarioLimits(persisted.scenarioJson));
+      const wasReplaced = JSON.stringify(persisted.scenarioJson) !== JSON.stringify(updated.scenarioJson);
+      setMessage(wasReplaced
+        ? `${updated.scenarioId} was saved, but synchronization selected a different Scenario version.${syncMessage}`
+        : `${updated.scenarioId} details and limits were verified in SQLite.${syncMessage}`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -606,12 +563,13 @@ export default function Settings() {
     }
   }
 
-  async function exportDataset(format) {
+  async function exportCompleteDataset() {
     try {
-      const filename = await downloadDataExport(format, includeArchivedExport);
-      setMessage(includeArchivedExport
-        ? `${filename} downloaded with active and archived records.`
-        : `${filename} downloaded with active ML-ready records only.`);
+      const filename = await downloadDataExport("jsonl", {
+        scope: "all",
+        includeArchived: true,
+      });
+      setMessage(`${filename} downloaded with all active and archived records.`);
     } catch (error) {
       setMessage(error.message);
     }
@@ -619,16 +577,16 @@ export default function Settings() {
 
   function removeScenario(scenario) {
     setScenarioRemoval(scenario);
-    setScenarioRemovalPassword("");
+    setScenarioRemovalConfirmation("");
   }
 
   async function confirmRemoveScenario(event) {
-    event.preventDefault();
-    if (!scenarioRemoval || isRemovingScenario) return;
+    event?.preventDefault();
+    if (!scenarioRemoval || isRemovingScenario || scenarioRemovalConfirmation !== "Delete") return;
     setIsRemovingScenario(true);
     setMessage("");
     try {
-      await deleteScenario(scenarioRemoval.scenarioId, scenarioRemovalPassword);
+      await deleteScenario(scenarioRemoval.scenarioId);
       setScenarios((current) => {
         const next = current.filter((item) => item.scenarioId !== scenarioRemoval.scenarioId);
         if (selectedScenarioId === scenarioRemoval.scenarioId) {
@@ -642,7 +600,7 @@ export default function Settings() {
         return next;
       });
       setScenarioRemoval(null);
-      setScenarioRemovalPassword("");
+      setScenarioRemovalConfirmation("");
       setMessage(`${scenarioRemoval.scenarioId} removed from active Scenario lists.`);
       runDataSync().catch(() => {});
     } catch (error) {
@@ -719,59 +677,12 @@ export default function Settings() {
               <div className="settings-inline-actions scenario-form-actions">
                 <button className="settings-secondary-button" type="button" onClick={testConnection}>Test Relay</button>
                 <button className="settings-secondary-button" type="button" onClick={syncNow}>Repair Sync</button>
-                <button className="settings-primary-button" type="button" onClick={saveSettings}>Save</button>
+                <button className="settings-primary-button" type="button" onClick={saveSyncSettings}>Save</button>
               </div>
               <div className="sync-repair-guide">
                 <strong>How synchronization is repaired</strong>
                 <span>Repair Sync compares this device with the relay manifest. It pulls missing Solutions and pushes local Solutions that the relay does not have, so it does not need to know how many devices exist.</span>
               </div>
-            </SettingsSection>
-          ) : null}
-
-          {activeSection === "security" ? (
-            <SettingsSection
-              title="Device Security"
-              description="Removing a Solution from the Leaderboard requires this device-local password. Only a salted hash is stored."
-            >
-              <form onSubmit={saveAdminPassword}>
-                {passwordForm.configured ? (
-                  <SettingsRow label="Current password">
-                    <input
-                      name="currentPassword"
-                      type="password"
-                      autoComplete="current-password"
-                      value={passwordForm.currentPassword}
-                      onChange={updatePasswordField}
-                      required
-                    />
-                  </SettingsRow>
-                ) : null}
-                <SettingsRow label={passwordForm.configured ? "New password" : "Create password"}>
-                  <input
-                    name="newPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength="6"
-                    value={passwordForm.newPassword}
-                    onChange={updatePasswordField}
-                    required
-                  />
-                </SettingsRow>
-                <SettingsRow label="Confirm new password">
-                  <input
-                    name="confirmPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength="6"
-                    value={passwordForm.confirmPassword}
-                    onChange={updatePasswordField}
-                    required
-                  />
-                </SettingsRow>
-                <button className="settings-primary-button" type="submit">
-                  {passwordForm.configured ? "Change Password" : "Set Password"}
-                </button>
-              </form>
             </SettingsSection>
           ) : null}
 
@@ -810,7 +721,7 @@ export default function Settings() {
                   onChange={updateSetting}
                 />
               </SettingsRow>
-              <button className="settings-primary-button" type="button" onClick={saveSettings}>Save Local GMAT</button>
+              <button className="settings-primary-button" type="button" onClick={saveGmatSettings}>Save Local GMAT</button>
             </SettingsSection>
           ) : null}
 
@@ -842,14 +753,19 @@ export default function Settings() {
               description="Review the real Scenario state vectors, validation limits, and generated GMAT script before teams submit Solutions."
             >
               <form className="scenario-limits-form" onSubmit={saveScenarioLimits}>
-                <SettingsRow label="Edit published Scenario">
-                  <select value={selectedScenarioId} onChange={selectScenarioForEditing} required>
-                    {scenarios.map((scenario) => (
-                      <option key={scenario.scenarioId} value={scenario.scenarioId}>
-                        {scenario.scenarioId}: {scenario.name}
-                      </option>
-                    ))}
-                  </select>
+                <SettingsRow label="Edit published Scenario" interactiveGroup>
+                  <div className="settings-input-action">
+                    <select value={selectedScenarioId} onChange={selectScenarioForEditing} required>
+                      {scenarios.map((scenario) => (
+                        <option key={scenario.scenarioId} value={scenario.scenarioId}>
+                          {scenario.scenarioId}: {scenario.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button className="solution-remove-button" type="button" onClick={() => removeScenario(selectedScenario)} disabled={!selectedScenario}>
+                      Remove
+                    </button>
+                  </div>
                 </SettingsRow>
                 <SettingsRow label="Scenario name">
                   <input
@@ -876,13 +792,14 @@ export default function Settings() {
                     Preview GMAT Script
                   </button>
                 </div>
+                <fieldset className="scenario-config-fields" disabled={!selectedScenarioId}>
                 <ScenarioOverview scenario={selectedScenario} />
                 <div className="scenario-limit-heading">Force Model</div>
                 <p className="scenario-model-note">
                   Central-body point-mass gravity is always applied. Gravity field enables spherical harmonics above that baseline.
                 </p>
                 <div className="scenario-parameter-grid">
-                  <ScenarioSelectField label="Central body" description="Propagation origin and primary body" name="centralBody" value={scenarioLimits.centralBody} onChange={updateScenarioLimit} options={["Earth"]} />
+                  <ScenarioSelectField label="Central body" description="Defined by the uploaded state vectors" name="centralBody" value={scenarioLimits.centralBody} onChange={updateScenarioLimit} options={[scenarioLimits.centralBody || "Earth"]} disabled />
                   <ScenarioToggleField label="Gravity field" description="Spherical-harmonic gravity" name="gravityEnabled" checked={scenarioLimits.gravityEnabled} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="Degree" description="Gravity harmonic degree" name="gravityDegree" value={scenarioLimits.gravityDegree} onChange={updateScenarioLimit} integer allowZero disabled={!scenarioLimits.gravityEnabled} />
                   <ScenarioNumberField label="Order" description="Gravity harmonic order" name="gravityOrder" value={scenarioLimits.gravityOrder} onChange={updateScenarioLimit} integer allowZero disabled={!scenarioLimits.gravityEnabled} />
@@ -903,35 +820,22 @@ export default function Settings() {
                 </div>
                 <div className="scenario-limit-heading">Validation limits</div>
                 <div className="scenario-parameter-grid">
-                  <ScenarioNumberField label="Δr_req" description="Intercept distance threshold, km" name="requiredFinalDistanceKm" value={scenarioLimits.requiredFinalDistanceKm} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="ΔVburn" description="Maximum Delta-V per burn, km/s" name="maximumDeltaVPerBurn" value={scenarioLimits.maximumDeltaVPerBurn} onChange={updateScenarioLimit} />
                   <ScenarioNumberField label="Tmax" description="Maximum mission time, s" name="maximumMissionTimeSec" value={scenarioLimits.maximumMissionTimeSec} onChange={updateScenarioLimit} />
-                  <ScenarioNumberField label="N_min" description="Minimum burn count" name="minimumBurnCount" value={scenarioLimits.minimumBurnCount} onChange={updateScenarioLimit} integer />
-                  <ScenarioNumberField label="N_max" description="Maximum burn count" name="maximumBurnCount" value={scenarioLimits.maximumBurnCount} onChange={updateScenarioLimit} integer />
-                  <ScenarioNumberField label="Δtmin" description="Minimum burn separation, s" name="minimumBurnSeparationSec" value={scenarioLimits.minimumBurnSeparationSec} onChange={updateScenarioLimit} />
+                  <ScenarioNumberField label="Minimum burn separation" description="Seconds between consecutive burns" name="minimumBurnSeparationSec" value={scenarioLimits.minimumBurnSeparationSec} onChange={updateScenarioLimit} />
                 </div>
                 <div className="scenario-limit-heading">Score function</div>
                 <div className="scenario-score-formula" aria-label="Score function formula">
-                  <code>Score = W_r exp(-(Δr_min - R0) / R_decay) + W_t / (1 + exp(kt(Tteam - Ct))) + W_v / (1 + exp(kv(ΔVteam - Cv))) - ΣPn</code>
-                  <span>The displayed signs match the current backend score calculation.</span>
+                  <code>Score = 50 + 25 / (1 + exp(kt(Tteam - Ct))) + 25 / (1 + exp(kv(ΔVteam - Cv)))</code>
+                  <span>Valid Solutions have intercepted within 5 km, so their distance term is always 50 points.</span>
                 </div>
                 <div className="scenario-parameter-grid">
-                  <ScenarioNumberField label="R0" description="Distance floor, km" name="distanceReferenceKm" value={scenarioLimits.distanceReferenceKm} onChange={updateScenarioLimit} allowZero />
-                  <ScenarioNumberField label="R_decay" description="Distance decay, km" name="distanceDecayKm" value={scenarioLimits.distanceDecayKm} onChange={updateScenarioLimit} />
-                  <ScenarioNumberField label="W_r" description="Distance score weight" name="distanceWeight" value={scenarioLimits.distanceWeight} onChange={updateScenarioLimit} allowZero />
                   <ScenarioNumberField label="Ct" description="Time center, s" name="timeReferenceSec" value={scenarioLimits.timeReferenceSec} onChange={updateScenarioLimit} allowZero />
                   <ScenarioNumberField label="kt" description="Time logistic slope" name="timeSlope" value={scenarioLimits.timeSlope} onChange={updateScenarioLimit} />
-                  <ScenarioNumberField label="W_t" description="Time score weight" name="timeWeight" value={scenarioLimits.timeWeight} onChange={updateScenarioLimit} allowZero />
                   <ScenarioNumberField label="Cv" description="Delta-V center, km/s" name="deltaVReferenceKmPerSec" value={scenarioLimits.deltaVReferenceKmPerSec} onChange={updateScenarioLimit} allowZero />
                   <ScenarioNumberField label="kv" description="Delta-V logistic slope" name="deltaVSlope" value={scenarioLimits.deltaVSlope} onChange={updateScenarioLimit} />
-                  <ScenarioNumberField label="W_v" description="Delta-V score weight" name="deltaVWeight" value={scenarioLimits.deltaVWeight} onChange={updateScenarioLimit} allowZero />
                 </div>
-                <button className="settings-primary-button" type="submit" disabled={isSavingScenario || !selectedScenarioId}>
-                  {isSavingScenario ? "Saving…" : "Save Scenario"}
-                </button>
-                <button className="settings-secondary-button" type="button" onClick={previewGmatScript} disabled={!selectedScenarioId}>
-                  Preview GMAT Script
-                </button>
+                </fieldset>
               </form>
               {scriptPreviewError ? <p className="settings-message settings-message-error">{scriptPreviewError}</p> : null}
               {scriptPreview ? (
@@ -943,58 +847,9 @@ export default function Settings() {
                   <pre>{scriptPreview}</pre>
                 </div>
               ) : null}
-              <div className="scenario-admin-list">
-                {scenarios.map((scenario) => (
-                  <article key={scenario.scenarioId}>
-                    <div className="scenario-admin-list-row">
-                      <div><strong>{scenario.scenarioId}</strong><span>{scenario.name}</span></div>
-                      <button className="solution-remove-button" type="button" onClick={() => removeScenario(scenario)}>
-                        Remove
-                      </button>
-                    </div>
-                    {scenarioRemoval?.scenarioId === scenario.scenarioId ? (
-                      <form className="scenario-remove-inline" onSubmit={confirmRemoveScenario}>
-                        <p>Enter the device administration password. The Scenario is removed from active lists, but archived for export and synchronization.</p>
-                        <input
-                          type="password"
-                          autoComplete="current-password"
-                          value={scenarioRemovalPassword}
-                          onChange={(event) => setScenarioRemovalPassword(event.target.value)}
-                          placeholder="Administration password"
-                          required
-                        />
-                        <div>
-                          <button
-                            className="settings-secondary-button"
-                            type="button"
-                            onClick={() => { setScenarioRemoval(null); setScenarioRemovalPassword(""); }}
-                            disabled={isRemovingScenario}
-                          >
-                            Cancel
-                          </button>
-                          <button className="solution-remove-button" type="submit" disabled={isRemovingScenario}>
-                            {isRemovingScenario ? "Removing…" : "Confirm Remove"}
-                          </button>
-                        </div>
-                      </form>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-              <div className="scenario-admin-divider"><span>Data export</span></div>
-              <SettingsRow
-                label="Include archived records"
-                description="Off by default. Enable only for audit or recovery; archived Solutions may be unsuitable for ML training."
-              >
-                <input
-                  type="checkbox"
-                  checked={includeArchivedExport}
-                  onChange={(event) => setIncludeArchivedExport(event.target.checked)}
-                />
-              </SettingsRow>
+              <div className="scenario-admin-divider"><span>Complete data export</span></div>
               <div className="settings-inline-actions scenario-form-actions">
-                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("jsonl")}>Export JSONL</button>
-                <button className="settings-secondary-button" type="button" onClick={() => exportDataset("csv")}>Export CSV</button>
+                <button className="settings-secondary-button" type="button" onClick={exportCompleteDataset}>Export all data</button>
               </div>
             </SettingsSection>
           ) : null}
@@ -1024,7 +879,6 @@ export default function Settings() {
                 </button>
                 <button className="settings-secondary-button" type="button" onClick={copyScenarioFormat}>Copy Format</button>
                 <button className="settings-secondary-button" type="button" onClick={downloadScenarioFormat}>Download Format</button>
-                <button className="settings-secondary-button" type="button" onClick={loadScenarioFormat}>Load Template</button>
               </div>
               {showScenarioFormat ? (
                 <div className="scenario-format-preview">
@@ -1039,9 +893,6 @@ export default function Settings() {
                 Load JSON Package
                 <input type="file" accept=".json" onChange={uploadScenario} hidden />
               </label>
-              <button className="settings-secondary-button scenario-template-button" type="button" onClick={() => setScenarioForm(newScenarioForm())}>
-                Reset to Complete Template
-              </button>
               <form className="scenario-create-form" onSubmit={publishScenario}>
                 <p className="settings-section-note">Scenario ID is assigned automatically using a sync-safe SC number.</p>
                 <SettingsRow label="Name">
@@ -1074,6 +925,40 @@ export default function Settings() {
           {message ? <p className="settings-message">{message}</p> : null}
         </main>
       </div>
+      {scenarioRemoval ? (
+        <div className="settings-dialog-backdrop" role="presentation">
+          <div className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="remove-scenario-title">
+            <p className="submission-panel-eyebrow">Protected action</p>
+            <h2 id="remove-scenario-title">Confirm removal</h2>
+            <p>Type <strong>Delete</strong> to remove {scenarioRemoval.scenarioId}: {scenarioRemoval.name} from active lists. Its archived record remains in the complete export.</p>
+            <input
+              type="text"
+              autoComplete="off"
+              value={scenarioRemovalConfirmation}
+              onChange={(event) => setScenarioRemovalConfirmation(event.target.value)}
+              placeholder="Delete"
+              autoFocus
+            />
+            <div className="settings-dialog-actions">
+              <button
+                type="button"
+                onClick={() => { setScenarioRemoval(null); setScenarioRemovalConfirmation(""); }}
+                disabled={isRemovingScenario}
+              >
+                Cancel
+              </button>
+              <button
+                className="solution-remove-button"
+                type="button"
+                onClick={confirmRemoveScenario}
+                disabled={isRemovingScenario || scenarioRemovalConfirmation !== "Delete"}
+              >
+                {isRemovingScenario ? "Removing…" : "Confirm Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1215,12 +1100,6 @@ function nonNegativeNumber(value, label) {
   return number;
 }
 
-function positiveInteger(value, label) {
-  const number = positiveNumber(value, label);
-  if (!Number.isInteger(number)) throw new Error(`${label} must be an integer.`);
-  return number;
-}
-
 function nonNegativeInteger(value, label) {
   const number = nonNegativeNumber(value, label);
   if (!Number.isInteger(number)) throw new Error(`${label} must be an integer.`);
@@ -1240,14 +1119,15 @@ function SettingsSection({ title, description, children }) {
   );
 }
 
-function SettingsRow({ label, description, children }) {
+function SettingsRow({ label, description, children, interactiveGroup = false }) {
+  const Component = interactiveGroup ? "div" : "label";
   return (
-    <label className="settings-row">
+    <Component className="settings-row">
       <span className="settings-row-label">
         <strong>{label}</strong>
         {description ? <small>{description}</small> : null}
       </span>
       <span className="settings-row-control">{children}</span>
-    </label>
+    </Component>
   );
 }

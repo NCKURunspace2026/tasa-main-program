@@ -208,6 +208,35 @@ def test_passed_solution_can_rebuild_an_empty_replica_and_recomputes_score(tmp_p
         assert rebuilt["contentHash"] == source["contentHash"]
 
 
+def test_needs_repair_status_survives_replica_import(tmp_path):
+    with TestClient(app) as client:
+        solution_id = _create_passed_solution(client)
+        scenario = client.get("/api/scenarios/SC-001").json()
+        scenario["scenarioJson"]["epoch"] = {
+            "value": "2026-08-30T05:00:00Z",
+            "timeSystem": "UTC",
+        }
+        updated = client.put("/api/scenarios/SC-001", json={
+            "name": scenario["name"],
+            "description": scenario["description"],
+            "scenarioJson": scenario["scenarioJson"],
+        })
+        assert updated.status_code == 200
+        assert client.get(f"/api/solutions/{solution_id}").json()["status"] == "needs_repair"
+
+    with SessionLocal() as source:
+        records = build_records(source)
+    replica_engine = create_engine(f"sqlite:///{tmp_path / 'repair-replica.db'}")
+    Base.metadata.create_all(replica_engine)
+    with Session(replica_engine) as replica:
+        result = import_records(replica, records)
+        assert result["conflicts"] == []
+        submission = replica.scalar(select(Submission).where(Submission.solution_id == solution_id))
+        assert submission.status == "needs_repair"
+        assert submission.total_score is None
+        assert "repair" in submission.error_message.lower()
+
+
 def test_imported_scenario_update_recomputes_existing_local_solutions():
     with TestClient(app) as client:
         solution_id = _create_passed_solution(client)
@@ -217,8 +246,8 @@ def test_imported_scenario_update_recomputes_existing_local_solutions():
         stricter = json.loads(json.dumps(scenario_record))
         stricter["updatedAt"] = "2099-01-01T00:00:00+00:00"
         stricter["payload"]["updatedAt"] = stricter["updatedAt"]
-        stricter["payload"]["scenarioJson"]["validation"]["requiredFinalDistanceKm"] = 4.0
-        stricter["payload"]["scenarioJson"]["scoreConfig"]["distanceReferenceKm"] = 4.0
+        stricter["payload"]["scenarioJson"]["validation"]["maximumMissionTimeSec"] = 4000.0
+        stricter["payload"]["scenarioJson"]["scoreConfig"]["timeReferenceSec"] = 4000.0
         unsigned = {key: value for key, value in stricter.items() if key != "contentHash"}
         stricter["contentHash"] = _content_hash(unsigned)
 

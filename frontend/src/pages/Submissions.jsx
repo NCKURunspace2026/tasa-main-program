@@ -47,7 +47,6 @@ const initialManualValues = {
   team: "",
   initialCoastTime: "",
   finalCoastTime: "",
-  notes: "",
 };
 
 const initialValidationState = {
@@ -116,6 +115,7 @@ export default function Submissions({ onNavigate }) {
       ...previousValues,
       [name]: value,
     }));
+    resetValidation();
   }
 
   function addBurn() {
@@ -156,6 +156,7 @@ export default function Submissions({ onNavigate }) {
           : burn,
       ),
     );
+    resetValidation();
   }
 
   function handleManualSubmit(event) {
@@ -462,7 +463,7 @@ function SubmissionScenarioSummary({ scenario }) {
       <div><span>Target r0</span><strong>{formatScenarioVector(target.positionKm, "km")}</strong></div>
       <div><span>Chaser r0</span><strong>{formatScenarioVector(chaser.positionKm, "km")}</strong></div>
       <div><span>Required distance</span><strong>{validation.requiredFinalDistanceKm ?? "?"} km</strong></div>
-      <div><span>Max Delta-V per burn</span><strong>{validation.maximumDeltaVPerBurn ?? validation.maximumTotalDeltaV ?? "?"} km/s</strong></div>
+      <div><span>Max Delta-V per burn</span><strong>{validation.maximumDeltaVPerBurn ?? "?"} km/s</strong></div>
     </section>
   );
 }
@@ -634,22 +635,6 @@ function ManualSubmission({
           }
         />
       </div>
-
-      <label className="manual-notes-field">
-        <span>Notes</span>
-
-        <textarea
-          name="notes"
-          value={values.notes}
-          maxLength={250}
-          placeholder="Optional notes about this submission."
-          onChange={onChange}
-        />
-
-        <small>
-          {values.notes.length} / 250
-        </small>
-      </label>
 
       <div className="submission-actions">
         <button

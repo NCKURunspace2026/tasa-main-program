@@ -1,4 +1,3 @@
-const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -18,24 +17,6 @@ function resolveGmatInstallation(selectedPath) {
     throw new Error("This folder does not contain bin/GmatConsole or bin/GmatConsole.exe. Select the GMAT installation folder or its api folder.");
   }
   return { gmatInstallationPath: normalized, executablePath };
-}
-
-function createPasswordRecord(password) {
-  if (typeof password !== "string" || password.length < 6) {
-    throw new Error("The device administration password must contain at least 6 characters.");
-  }
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return { adminPasswordSalt: salt, adminPasswordHash: hash };
-}
-
-function verifyPassword(password, config) {
-  if (!config?.adminPasswordSalt || !config?.adminPasswordHash || typeof password !== "string") {
-    return false;
-  }
-  const expected = Buffer.from(config.adminPasswordHash, "hex");
-  const actual = crypto.scryptSync(password, config.adminPasswordSalt, expected.length);
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 function createConfigStore(app) {
@@ -69,7 +50,5 @@ function createConfigStore(app) {
 
 module.exports = {
   createConfigStore,
-  createPasswordRecord,
   resolveGmatInstallation,
-  verifyPassword,
 };

@@ -15,19 +15,23 @@ def get_leaderboard(
     search: Optional[str],
 ) -> dict:
     start = (page - 1) * page_size
+    all_count = count_passed_by_scenario(session, scenario_id)
+    all_rows = find_passed_by_scenario(
+        session, scenario_id, offset=0, limit=max(all_count, 1),
+    )
+    rank_by_solution_id = {}
+    rank = 0
+    for submission, solution in all_rows:
+        if submission.status == "passed":
+            rank += 1
+            rank_by_solution_id[solution.id] = rank
     ranked = []
-    for rank, (submission, solution) in enumerate(
-        find_passed_by_scenario(
-            session,
-            scenario_id,
-            offset=start,
-            limit=page_size,
-            search=search,
-        ),
-        start=start + 1,
-    ):
+    rows = find_passed_by_scenario(
+        session, scenario_id, offset=start, limit=page_size, search=search,
+    )
+    for submission, solution in rows:
         item = {
-            "rank": rank,
+            "rank": rank_by_solution_id.get(solution.id),
             "solutionId": solution.id,
             "solutionName": solution.name,
             "officialScore": submission.total_score,

@@ -3,9 +3,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const {
   createConfigStore,
-  createPasswordRecord,
   resolveGmatInstallation,
-  verifyPassword,
 } = require("./main/configStore.cjs");
 const { generateGmatScript } = require("./main/scriptGenerator.cjs");
 const { validateSubmission } = require("./main/validationService.cjs");
@@ -24,6 +22,27 @@ let startupSyncStatus = {
   checkedAt: null,
   result: null,
 };
+let backgroundSyncTimer = null;
+let activeSyncRun = null;
+
+function safeFileNamePart(value, fallback) {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+}
+
+function createUniqueOutputDirectory(parentDirectory, baseName) {
+  let candidate = path.join(parentDirectory, baseName);
+  let suffix = 2;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(parentDirectory, `${baseName}_${suffix}`);
+    suffix += 1;
+  }
+  fs.mkdirSync(candidate, { recursive: false });
+  return candidate;
+}
 
 function publicDeviceConfig(config) {
   const publicConfig = { ...config };
@@ -67,7 +86,15 @@ function publishStartupSyncStatus(status) {
   });
 }
 
-async function runStartupSyncCheck(localApiBaseUrl) {
+function runStartupSyncCheck(localApiBaseUrl) {
+  if (activeSyncRun) return activeSyncRun;
+  activeSyncRun = performSyncCheck(localApiBaseUrl).finally(() => {
+    activeSyncRun = null;
+  });
+  return activeSyncRun;
+}
+
+async function performSyncCheck(localApiBaseUrl) {
   publishStartupSyncStatus({
     state: "running",
     message: "Checking the data relay after application startup...",
@@ -121,16 +148,7 @@ app.whenReady().then(async () => {
     if (!/^\/(?:scenarios|solutions|data)(?:\/|$)/.test(pathName)) {
       throw new Error("This administration request is not allowed.");
     }
-    const { adminPassword, ...requestOptions } = options;
-    if (String(requestOptions.method ?? "GET").toUpperCase() === "DELETE") {
-      const securityConfig = configStore.read();
-      if (!securityConfig.adminPasswordHash) {
-        throw new Error("Set a device administration password in Settings before removing records.");
-      }
-      if (!verifyPassword(adminPassword, securityConfig)) {
-        throw new Error("The device administration password is incorrect.");
-      }
-    }
+    const requestOptions = options;
     const response = await fetch(`${localApiBaseUrl}${pathName}`, {
       ...requestOptions,
       headers: {
@@ -144,26 +162,15 @@ app.whenReady().then(async () => {
     return payload;
   });
   ipcMain.handle("gmat:get-config", () => publicDeviceConfig(configStore.read()));
-  ipcMain.handle("admin:password-status", () => ({
-    configured: Boolean(configStore.read().adminPasswordHash),
-  }));
-  ipcMain.handle("admin:set-password", (_event, request) => {
-    const current = configStore.read();
-    if (current.adminPasswordHash && !verifyPassword(request.currentPassword, current)) {
-      throw new Error("The current device administration password is incorrect.");
-    }
-    configStore.write(createPasswordRecord(request.newPassword));
-    return { configured: true };
-  });
   ipcMain.handle("gmat:select-installation", async () => {
     const result = await dialog.showOpenDialog({ properties: ["openDirectory"], title: "Select GMAT installation or api folder" });
     if (result.canceled) return publicDeviceConfig(configStore.read());
-    return publicDeviceConfig(configStore.write(resolveGmatInstallation(result.filePaths[0])));
+    return resolveGmatInstallation(result.filePaths[0]);
   });
   ipcMain.handle("gmat:save-config", (_event, config) => {
     const pathConfig = config.gmatInstallationPath
       ? resolveGmatInstallation(config.gmatInstallationPath)
-      : config;
+      : { gmatInstallationPath: "", executablePath: null };
     const saved = configStore.write({ ...config, ...pathConfig });
     return publicDeviceConfig(saved);
   });
@@ -175,9 +182,33 @@ app.whenReady().then(async () => {
     ...request,
     reportPath: request.reportPath ?? path.join(app.getPath("temp"), "mission-dashboard-preview-report.txt"),
   }));
+  ipcMain.handle("gmat:download-validation-script", async (_event, request) => {
+    const scenarioId = safeFileNamePart(request?.scenarioId, "Scenario");
+    const solutionId = safeFileNamePart(request?.solutionId, "Solution");
+    const submissionId = safeFileNamePart(request?.submissionId, "Submission");
+    const baseName = `MissionDashboard_${scenarioId}_${solutionId}_${submissionId}_Validation`;
+    const result = await dialog.showOpenDialog({
+      title: "Choose where to save the GMAT validation package",
+      defaultPath: app.getPath("downloads"),
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled || !result.filePaths[0]) return { saved: false };
+    const outputDirectory = createUniqueOutputDirectory(result.filePaths[0], baseName);
+    const scriptPath = path.join(outputDirectory, `${baseName}.script`);
+    const script = generateGmatScript({
+      scenario: request?.scenario,
+      finalDecisionVariables: request?.finalDecisionVariables,
+      reportPath: path.join(outputDirectory, `${baseName}_Report.txt`),
+      inspectionReportPath: path.join(outputDirectory, `${baseName}_Inspection.txt`),
+      includeVisualization: true,
+    });
+    fs.writeFileSync(scriptPath, script, "utf8");
+    return { saved: true, filePath: scriptPath, outputDirectory };
+  });
   ipcMain.handle("sync:get-startup-status", () => startupSyncStatus);
   createWindow(localApiBaseUrl);
   runStartupSyncCheck(localApiBaseUrl);
+  backgroundSyncTimer = setInterval(() => runStartupSyncCheck(localApiBaseUrl), 60000);
 }).catch((error) => {
   console.error(`[startup] ${error.stack ?? error.message}`);
   dialog.showErrorBox("Mission Dashboard could not start", error.message);
@@ -195,5 +226,6 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  if (backgroundSyncTimer) clearInterval(backgroundSyncTimer);
   localBackend?.process?.kill();
 });

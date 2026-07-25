@@ -34,15 +34,11 @@ def _check_local_validation(payload: SubmissionInput, scenario_json: dict) -> No
     checks = (
         (validation.minimumDistanceKm, limits.get("requiredFinalDistanceKm"), "distance"),
         (validation.missionTimeSec, limits.get("maximumMissionTimeSec"), "mission time"),
-        (len(decision.burns), limits.get("maximumBurnCount"), "burn count"),
     )
     for value, limit, label in checks:
         if limit is not None and value > float(limit):
             raise ValueError(f"Local GMAT {label} exceeds the Scenario limit.")
-    minimum_burns = limits.get("minimumBurnCount")
-    if minimum_burns is not None and len(decision.burns) < int(minimum_burns):
-        raise ValueError("Local GMAT burn count is below the Scenario minimum.")
-    delta_v_per_burn_limit = limits.get("maximumDeltaVPerBurn", limits.get("maximumTotalDeltaV"))
+    delta_v_per_burn_limit = limits.get("maximumDeltaVPerBurn")
     if delta_v_per_burn_limit is not None and any(
         math.hypot(*burn.deltaV) > float(delta_v_per_burn_limit) for burn in decision.burns
     ):

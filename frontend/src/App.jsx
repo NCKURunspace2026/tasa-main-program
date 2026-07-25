@@ -21,6 +21,15 @@ export default function App() {
       .catch(() => setGmatConfig({ executablePath: "" }));
   }, []);
 
+  useEffect(() => {
+    function handlePopState() {
+      const page = new URLSearchParams(window.location.search).get("page");
+      setCurrentPage(["submissions", "leaderboard", "settings"].includes(page) ? page : "submissions");
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   function handleNavigate(page, parameters = {}) {
     const searchParams = new URLSearchParams({ page });
 

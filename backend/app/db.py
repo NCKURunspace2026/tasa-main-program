@@ -8,7 +8,10 @@ from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base, Scenario, SyncEvent, SyncRelayState
-from .services.validation_result_service import recompute_scenario_submissions
+from .services.validation_result_service import (
+    mark_scenario_submissions_for_repair,
+    recompute_scenario_submissions,
+)
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +96,7 @@ def initialize_database() -> None:
             # overwriting limits that a Server operator has already customized.
             scenario_definition = dict(scenario.scenario_json)
             definition_changed = False
+            dynamics_changed = False
             propagator = dict(scenario_definition.get("propagator", {}))
             if (
                 propagator.get("initialStepSec") == 60.0
@@ -102,6 +106,7 @@ def initialize_database() -> None:
                 propagator["maxStepSec"] = 1.0
                 scenario_definition["propagator"] = propagator
                 definition_changed = True
+                dynamics_changed = True
             spacecraft = dict(scenario_definition.get("spacecraft", {}))
             packaged_spacecraft = definition.get("spacecraft", {})
             for role in ("target", "chaser"):
@@ -112,10 +117,43 @@ def initialize_database() -> None:
                     ]
                     spacecraft[role] = role_definition
                     definition_changed = True
+                    dynamics_changed = True
+            validation = dict(scenario_definition.get("validation", {}))
+            if "maximumTotalDeltaV" in validation:
+                validation.setdefault("maximumDeltaVPerBurn", validation["maximumTotalDeltaV"])
+                validation.pop("maximumTotalDeltaV")
+                scenario_definition["validation"] = validation
+                definition_changed = True
             if definition_changed:
                 scenario_definition["spacecraft"] = spacecraft
                 scenario.scenario_json = scenario_definition
                 scenario.updated_at = datetime.now(timezone.utc)
+                if dynamics_changed:
+                    mark_scenario_submissions_for_repair(
+                        session, scenario, updated_at=scenario.updated_at,
+                    )
+        for stored_scenario in session.scalars(select(Scenario)).all():
+            stored_definition = dict(stored_scenario.scenario_json)
+            stored_validation = dict(stored_definition.get("validation", {}))
+            stored_score = dict(stored_definition.get("scoreConfig", {}))
+            changed = False
+            for legacy_key in ("minimumBurnCount", "maximumBurnCount"):
+                if legacy_key in stored_validation:
+                    stored_validation.pop(legacy_key)
+                    changed = True
+            if stored_validation.get("requiredFinalDistanceKm") != 5.0:
+                stored_validation["requiredFinalDistanceKm"] = 5.0
+                changed = True
+            score_keys = ("timeReferenceSec", "timeSlope", "deltaVReferenceKmPerSec", "deltaVSlope")
+            normalized_score = {key: stored_score[key] for key in score_keys if key in stored_score}
+            if normalized_score != stored_score:
+                changed = True
+            if changed:
+                stored_definition["validation"] = stored_validation
+                stored_definition["scoreConfig"] = normalized_score
+                stored_scenario.scenario_json = stored_definition
+                stored_scenario.updated_at = datetime.now(timezone.utc)
+                session.add(SyncEvent(record_type="scenario", record_id=stored_scenario.id))
         if session.get(SyncRelayState, 1) is None:
             session.add(SyncRelayState(id=1, generation_id=uuid4().hex))
         if session.query(SyncEvent).count() == 0:

@@ -4,7 +4,7 @@ import "./Leaderboard.css";
 
 import PageHeader from "../components/PageHeader.jsx";
 import useScenarios from "../hooks/useScenarios.js";
-import { deleteSolution, getLeaderboard, getSolutionDetail, revalidateSolution, runDataSync } from "../services/api.js";
+import { deleteSolution, downloadDataExport, getLeaderboard, getSolutionDetail, renameSolution, revalidateSolution, runDataSync } from "../services/api.js";
 
 import { Table, pixel } from "@astryxdesign/core/Table";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
@@ -38,9 +38,15 @@ export default function Leaderboard() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isRemoving, setIsRemoving] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
-  const [showRemovePassword, setShowRemovePassword] = useState(false);
-  const [removePassword, setRemovePassword] = useState("");
-  const removePasswordRef = useRef(null);
+  const [isDownloadingScript, setIsDownloadingScript] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [solutionName, setSolutionName] = useState("");
+  const [showRemoveConfirmation, setShowRemoveConfirmation] = useState(false);
+  const [removeConfirmation, setRemoveConfirmation] = useState("");
+  const removeConfirmationRef = useRef(null);
+  const solutionNameRef = useRef(null);
   const detailRef = useRef(null);
   const skipAutoSelectionRef = useRef(false);
 
@@ -92,6 +98,7 @@ export default function Leaderboard() {
     }
 
     let isCurrent = true;
+    setSelectedSolution(null);
     setDetailError("");
     getSolutionDetail(selectedSolutionId)
       .then((result) => {
@@ -104,9 +111,10 @@ export default function Leaderboard() {
     return () => {
       isCurrent = false;
     };
-  }, [selectedSolutionId]);
+  }, [refreshVersion, selectedSolutionId]);
 
   const handleSelectSolution = useCallback((solutionId) => {
+    setSelectedSolution(null);
     setSelectedSolutionId(solutionId);
     setSelectedTab("summary");
     const params = new URLSearchParams(window.location.search);
@@ -160,7 +168,7 @@ export default function Leaderboard() {
         key: "officialScore",
         header: "Local Score",
         width: pixel(130),
-        renderCell: (item) => item.officialScore.toFixed(2),
+        renderCell: (item) => item.officialScore == null ? "—" : item.officialScore.toFixed(2),
       },
       {
         key: "minimumDistance",
@@ -175,10 +183,10 @@ export default function Leaderboard() {
         renderCell: (item) => item.totalDeltaV.toFixed(4),
       },
       {
-        key: "totalTime",
-        header: "Time (s)",
+        key: "minimumDistanceTime",
+        header: "Completion time (s)",
         width: pixel(125),
-        renderCell: (item) => item.totalTime.toFixed(2),
+        renderCell: (item) => item.minimumDistanceTime == null ? "—" : item.minimumDistanceTime.toFixed(2),
       },
       { key: "burnCount", header: "Burns", width: pixel(75) },
       { key: "status", header: "Status", width: pixel(110) },
@@ -195,26 +203,58 @@ export default function Leaderboard() {
   function removeSelectedSolution() {
     if (!selectedSolution || isRemoving) return;
     setDetailError("");
-    setRemovePassword("");
-    setShowRemovePassword(true);
+    setRemoveConfirmation("");
+    setShowRemoveConfirmation(true);
   }
 
   useEffect(() => {
-    if (showRemovePassword) {
-      window.setTimeout(() => removePasswordRef.current?.focus(), 0);
+    if (showRemoveConfirmation) {
+      window.setTimeout(() => removeConfirmationRef.current?.focus(), 0);
     }
-  }, [showRemovePassword]);
+  }, [showRemoveConfirmation]);
+
+  useEffect(() => {
+    if (showRenameDialog) {
+      window.setTimeout(() => solutionNameRef.current?.focus(), 0);
+    }
+  }, [showRenameDialog]);
+
+  function editSelectedSolutionName() {
+    if (!selectedSolution || isRenaming) return;
+    setDetailError("");
+    setSolutionName(selectedSolution.solution.name);
+    setShowRenameDialog(true);
+  }
+
+  async function confirmSolutionRename(event) {
+    event.preventDefault();
+    if (!selectedSolution || isRenaming) return;
+    setIsRenaming(true);
+    setDetailError("");
+    try {
+      const renamed = await renameSolution(selectedSolution.solutionId, solutionName);
+      setSelectedSolution(renamed);
+      setShowRenameDialog(false);
+      setSolutionName("");
+      setRefreshVersion((value) => value + 1);
+      runDataSync().catch(() => {});
+    } catch (requestError) {
+      setDetailError(requestError.message);
+    } finally {
+      setIsRenaming(false);
+    }
+  }
 
   async function confirmRemoveSelectedSolution(event) {
     event.preventDefault();
-    if (!selectedSolution || isRemoving) return;
+    if (!selectedSolution || isRemoving || removeConfirmation !== "Delete") return;
     setIsRemoving(true);
     setDetailError("");
     try {
-      await deleteSolution(selectedSolution.solutionId, removePassword);
+      await deleteSolution(selectedSolution.solutionId);
       skipAutoSelectionRef.current = true;
-      setShowRemovePassword(false);
-      setRemovePassword("");
+      setShowRemoveConfirmation(false);
+      setRemoveConfirmation("");
       setSelectedSolutionId(null);
       setSelectedSolution(null);
       const params = new URLSearchParams(window.location.search);
@@ -271,6 +311,47 @@ export default function Leaderboard() {
     }
   }
 
+  async function downloadSelectedSolutionScript() {
+    if (!selectedSolution || isDownloadingScript) return;
+    const scenario = scenarioOptions.find((item) => item.id === selectedSolution.scenarioId);
+    if (!scenario?.scenarioJson || Object.keys(scenario.scenarioJson).length === 0) {
+      setDetailError("The selected Scenario has no simulation definition.");
+      return;
+    }
+    if (!window.missionDashboardDesktop?.downloadGmatScript) {
+      setDetailError("GMAT script downloads require the Electron Client app.");
+      return;
+    }
+    setIsDownloadingScript(true);
+    setDetailError("");
+    try {
+      await window.missionDashboardDesktop.downloadGmatScript({
+        scenarioId: selectedSolution.scenarioId,
+        solutionId: selectedSolution.solutionId,
+        submissionId: selectedSolution.submissionId,
+        scenario,
+        finalDecisionVariables: selectedSolution.finalDecisionVariables,
+      });
+    } catch (requestError) {
+      setDetailError(requestError.message);
+    } finally {
+      setIsDownloadingScript(false);
+    }
+  }
+
+  async function exportMachineLearningData() {
+    if (isExporting) return;
+    setIsExporting(true);
+    setError("");
+    try {
+      await downloadDataExport("jsonl", { scope: "ml", scenarioId });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <section className="leaderboard-page">
       <PageHeader
@@ -280,7 +361,20 @@ export default function Leaderboard() {
         scenarioId={scenarioId}
         scenarioOptions={scenarioOptions}
         onScenarioChange={handleScenarioChange}
-      />
+      >
+        <button
+          className="solution-download-button"
+          type="button"
+          title="Download selected Scenario ML dataset"
+          aria-label="Download selected Scenario ML dataset"
+          disabled={isExporting}
+          onClick={exportMachineLearningData}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
+          </svg>
+        </button>
+      </PageHeader>
 
       <section className="leaderboard-panel leaderboard-table-panel">
         <header className="leaderboard-panel-header">
@@ -324,7 +418,24 @@ export default function Leaderboard() {
           </div>
           {selectedSolution ? (
             <div className="solution-detail-actions">
-              <span className="solution-detail-status">Validated</span>
+              <span className={`solution-detail-status${selectedSolution.status === "needs_repair" ? " is-warning" : ""}`}>
+                {selectedSolution.status === "needs_repair" ? "Needs repair" : "Validated"}
+              </span>
+              <button
+                className="solution-download-button"
+                type="button"
+                title="Download GMAT validation script"
+                aria-label="Download GMAT validation script"
+                onClick={downloadSelectedSolutionScript}
+                disabled={isDownloadingScript || isRenaming || isRepairing || isRemoving}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
+                </svg>
+              </button>
+              <button className="solution-rename-button" type="button" onClick={editSelectedSolutionName} disabled={isRenaming || isRepairing || isRemoving}>
+                Rename
+              </button>
               <button className="solution-repair-button" type="button" onClick={repairSelectedSolution} disabled={isRepairing || isRemoving}>
                 {isRepairing ? "Repairing..." : "Repair GMAT metrics"}
               </button>
@@ -352,7 +463,48 @@ export default function Leaderboard() {
         ) : null}
       </section>
 
-      {showRemovePassword ? (
+      {showRenameDialog ? (
+        <div className="leaderboard-dialog-backdrop" role="presentation">
+          <form
+            className="leaderboard-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rename-solution-title"
+            onSubmit={confirmSolutionRename}
+          >
+            <p className="submission-panel-eyebrow">Solution metadata</p>
+            <h2 id="rename-solution-title">Rename solution</h2>
+            <p>Only the display name can be changed. Decision variables and validated GMAT results remain locked.</p>
+            <label className="leaderboard-name-field">
+              <span>Solution name</span>
+              <input
+                ref={solutionNameRef}
+                type="text"
+                maxLength={180}
+                value={solutionName}
+                onChange={(event) => setSolutionName(event.target.value)}
+                placeholder="Enter solution name"
+                required
+              />
+            </label>
+            {detailError ? <p className="leaderboard-dialog-error">{detailError}</p> : null}
+            <div className="leaderboard-dialog-actions">
+              <button
+                type="button"
+                onClick={() => { setShowRenameDialog(false); setSolutionName(""); setDetailError(""); }}
+                disabled={isRenaming}
+              >
+                Cancel
+              </button>
+              <button className="solution-rename-button" type="submit" disabled={isRenaming || !solutionName.trim()}>
+                {isRenaming ? "Saving…" : "Save name"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {showRemoveConfirmation ? (
         <div className="leaderboard-dialog-backdrop" role="presentation">
           <form
             className="leaderboard-dialog"
@@ -362,17 +514,17 @@ export default function Leaderboard() {
             onSubmit={confirmRemoveSelectedSolution}
           >
             <p className="submission-panel-eyebrow">Protected action</p>
-            <h2 id="remove-solution-title">Enter administration password</h2>
-            <p>Remove {selectedSolution?.solutionId} from the Leaderboard. Its dataset record will remain archived.</p>
-            <label className="leaderboard-password-field">
-              <span>Administration password</span>
+            <h2 id="remove-solution-title">Confirm removal</h2>
+            <p>Type <strong>Delete</strong> to remove {selectedSolution?.solutionId} from the Leaderboard. Its dataset record remains archived.</p>
+            <label className="leaderboard-name-field">
+              <span>Confirmation</span>
               <input
-                ref={removePasswordRef}
-                type="password"
+                ref={removeConfirmationRef}
+                type="text"
                 autoComplete="off"
-                value={removePassword}
-                onChange={(event) => setRemovePassword(event.target.value)}
-                placeholder="Enter password"
+                value={removeConfirmation}
+                onChange={(event) => setRemoveConfirmation(event.target.value)}
+                placeholder="Delete"
                 required
               />
             </label>
@@ -380,12 +532,12 @@ export default function Leaderboard() {
             <div className="leaderboard-dialog-actions">
               <button
                 type="button"
-                onClick={() => { setShowRemovePassword(false); setRemovePassword(""); }}
+                onClick={() => { setShowRemoveConfirmation(false); setRemoveConfirmation(""); }}
                 disabled={isRemoving}
               >
                 Cancel
               </button>
-              <button className="solution-remove-button" type="submit" disabled={isRemoving}>
+              <button className="solution-remove-button" type="submit" disabled={isRemoving || removeConfirmation !== "Delete"}>
                 {isRemoving ? "Removing…" : "Confirm Remove"}
               </button>
             </div>
@@ -412,11 +564,10 @@ function SolutionDetailTab({ tab, detail }) {
         <DetailCard title="Local GMAT Results">
           <MetadataList>
             <MetadataListItem label="Local rank">{detail.officialResults.rank ?? "—"}</MetadataListItem>
-            <MetadataListItem label="Local score"><strong className="official-score-value">{detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
+            <MetadataListItem label="Local score"><strong className="official-score-value">{detail.officialResults.officialScore == null ? "—" : detail.officialResults.officialScore.toFixed(2)}</strong></MetadataListItem>
             <MetadataListItem label="Closest distance">{detail.officialResults.minimumDistance.toFixed(4)} km</MetadataListItem>
-            <MetadataListItem label="Completion time">{detail.officialResults.totalTime.toFixed(6)} s</MetadataListItem>
+            <MetadataListItem label="Completion time">{detail.officialResults.minimumDistanceTime == null ? "—" : `${detail.officialResults.minimumDistanceTime.toFixed(6)} s`}</MetadataListItem>
             <MetadataListItem label="Total Delta-V">{detail.officialResults.totalDeltaV.toFixed(4)} km/s</MetadataListItem>
-            <MetadataListItem label="Total time">{detail.officialResults.totalTime.toFixed(2)} s</MetadataListItem>
             <MetadataListItem label="Burn count">{detail.officialResults.burnCount}</MetadataListItem>
           </MetadataList>
         </DetailCard>

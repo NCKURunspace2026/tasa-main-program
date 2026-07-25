@@ -23,7 +23,7 @@ def _passed_solution_query(scenario_id: str, search: str | None = None):
         .where(
             Solution.scenario_id == scenario_id,
             Solution.deleted_at.is_(None),
-            Submission.status == "passed",
+            Submission.status.in_(("passed", "needs_repair")),
         )
     )
     if search:
@@ -41,7 +41,12 @@ def find_passed_by_scenario(
     search: str | None = None,
 ):
     query = _passed_solution_query(scenario_id, search).order_by(
-        Submission.total_score.desc(), Submission.created_at.asc()
+        (Submission.status == "passed").desc(),
+        Submission.total_score.desc(),
+        Submission.server_min_distance_km.asc(),
+        Submission.total_delta_v_kmps.asc(),
+        Submission.mission_time_sec.asc(),
+        Submission.created_at.asc(),
     )
     return session.execute(query.offset(offset).limit(limit)).all()
 

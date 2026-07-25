@@ -49,7 +49,7 @@ def _sync_once() -> None:
 
 def create_application(node_role: str | None = None) -> FastAPI:
     selected_role = node_role or os.getenv("MISSION_DASHBOARD_NODE_ROLE", "local")
-    dashboard = FastAPI(title="Mission Dashboard API", version="0.2.27", lifespan=lifespan)
+    dashboard = FastAPI(title="Mission Dashboard API", version="0.2.28", lifespan=lifespan)
     dashboard.state.node_role = selected_role
     dashboard.add_middleware(
         CORSMiddleware,

@@ -106,9 +106,16 @@ export function getSolutionDetail(solutionId) {
 }
 
 export function revalidateSolution(solutionId, payload) {
-  return request(`/solutions/${solutionId}/revalidate`, {
+  return adminRequest(`/solutions/${solutionId}/revalidate`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function renameSolution(solutionId, name) {
+  return adminRequest(`/solutions/${solutionId}/name`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
   });
 }
 
@@ -130,19 +137,21 @@ export function updateScenario(scenarioId, scenario) {
   });
 }
 
-export function deleteScenario(scenarioId, adminPassword) {
-  return adminRequest(`/scenarios/${scenarioId}`, { method: "DELETE", adminPassword });
+export function deleteScenario(scenarioId) {
+  return adminRequest(`/scenarios/${scenarioId}`, { method: "DELETE" });
 }
 
-export function deleteSolution(solutionId, adminPassword) {
-  return adminRequest(`/solutions/${solutionId}`, { method: "DELETE", adminPassword });
+export function deleteSolution(solutionId) {
+  return adminRequest(`/solutions/${solutionId}`, { method: "DELETE" });
 }
 
-export async function downloadDataExport(format, includeArchived = false) {
+export async function downloadDataExport(format, options = {}) {
   const parameters = new URLSearchParams({
     format,
-    includeArchived: String(includeArchived),
+    includeArchived: String(options.includeArchived ?? false),
+    scope: options.scope ?? "ml",
   });
+  if (options.scenarioId) parameters.set("scenarioId", options.scenarioId);
   const response = await fetch(`${getStoredApiBaseUrl()}/data/export?${parameters.toString()}`);
   if (!response.ok) throw new Error(`Data export failed (${response.status}).`);
   const blob = await response.blob();

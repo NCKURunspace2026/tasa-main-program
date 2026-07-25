@@ -19,9 +19,9 @@
   "propagator": { "integrator": "RungeKutta89", "initialStepSec": 1.0, "maxStepSec": 1.0, "minStepSec": 0.001, "accuracy": 1e-12 },
   "mission": { "type": "interception", "controlledSpacecraft": "ChaserB", "targetSpacecraft": "TargetA", "maneuverModel": "instantaneous-impulsive", "requiresPositionMatch": true, "requiresVelocityMatch": false, "decisionVariableStructure": { "tWait": true, "dynamicBurnCount": true, "timeBetweenBurns": true, "finalCoastTime": true } },
   "referenceValues": { "targetOrbitalPeriod": 8497.178560498533, "maximumMissionTime": 33988.71424199413 },
-  "constraints": { "minimumBurnCount": 1, "maximumBurnCount": 5, "maximumDeltaVPerBurn": 1.5, "minimumBurnSeparation": 100.0, "maximumMissionTime": 33988.71424199413, "interceptionDistance": 5.0, "nonNegativeTimes": true },
-  "validation": { "minimumBurnCount": 1, "maximumBurnCount": 5, "maximumTotalDeltaV": 1.5, "minimumBurnSeparationSec": 100.0, "maximumMissionTimeSec": 33988.71424199413, "requiredFinalDistanceKm": 5.0, "nonNegativeTimes": true },
+  "constraints": { "maximumDeltaVPerBurn": 1.5, "minimumBurnSeparation": 100.0, "maximumMissionTime": 33988.71424199413, "interceptionDistance": 5.0, "nonNegativeTimes": true },
+  "validation": { "maximumDeltaVPerBurn": 1.5, "minimumBurnSeparationSec": 100.0, "maximumMissionTimeSec": 33988.71424199413, "requiredFinalDistanceKm": 5.0, "nonNegativeTimes": true },
   "officialEvaluation": { "propagateBothSpacecraft": true, "requiredMetrics": ["finalDistance", "minimumDistance", "closestApproachTime", "firstEntryTime", "totalDeltaV", "totalMissionTime", "burnCount", "burnMagnitudes"], "leaderboardEligibility": { "requiresPhysicalValidation": true, "requiresAllConstraintsSatisfied": true, "requiresValidationStatus": "validated" } },
-  "scoreConfig": { "distanceReferenceKm": 5.0, "distanceDecayKm": 100.0, "timeReferenceSec": 5000.0, "timeSlope": 0.001, "deltaVReferenceKmPerSec": 0.5, "deltaVSlope": 10.0, "distanceWeight": 50.0, "timeWeight": 25.0, "deltaVWeight": 25.0 },
+  "scoreConfig": { "timeReferenceSec": 5000.0, "timeSlope": 0.001, "deltaVReferenceKmPerSec": 0.5, "deltaVSlope": 10.0 },
   "officialScore": { "status": "test-baseline", "productionApproved": false, "direction": "maximize", "notes": ["This score configuration is for end-to-end testing and is not competition-approved.", "Client-provided scores are ignored.", "Optimizer objectiveValue is not an official score."] }
 }

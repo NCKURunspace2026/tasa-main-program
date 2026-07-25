@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -27,7 +27,7 @@ class BurnInput(StrictModel):
 
 class DecisionVariablesInput(StrictModel):
     tWait: float = Field(ge=0)
-    burns: list[BurnInput] = Field(min_length=1)
+    burns: list[BurnInput]
     finalCoastTime: float = Field(ge=0)
 
     @model_validator(mode="after")
@@ -81,3 +81,15 @@ class SubmissionInput(StrictModel):
 class SolutionRevalidationInput(StrictModel):
     decisionVariables: DecisionVariablesInput
     clientValidation: ClientValidationInput
+
+
+class SolutionRenameInput(StrictModel):
+    name: str = Field(min_length=1, max_length=180)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("Solution name cannot be empty.")
+        return name

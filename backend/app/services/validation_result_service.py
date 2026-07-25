@@ -10,6 +10,9 @@ from ..models import Scenario, Solution, Submission, SyncEvent
 from .score_service import InvalidScoreConfigError, calculate_score
 
 
+DYNAMICS_FIELDS = ("epoch", "coordinateSystem", "spacecraft", "forceModel", "propagator")
+
+
 @dataclass(frozen=True)
 class RecomputedSubmission:
     status: str
@@ -109,6 +112,8 @@ def recompute_scenario_submissions(
     ).all()
     changed = 0
     for submission, solution in rows:
+        if submission.status == "needs_repair":
+            continue
         result = recompute_submission_result(
             scenario.scenario_json,
             solution.decision_variables_json,
@@ -124,6 +129,36 @@ def recompute_scenario_submissions(
             if emit_sync_events:
                 session.add(SyncEvent(record_type="solution", record_id=solution.id))
     return changed
+
+
+def scenario_dynamics_changed(previous: dict, current: dict) -> bool:
+    return any(previous.get(key) != current.get(key) for key in DYNAMICS_FIELDS)
+
+
+def mark_scenario_submissions_for_repair(
+    session: Session,
+    scenario: Scenario,
+    *,
+    updated_at,
+    emit_sync_events: bool = True,
+) -> int:
+    rows = session.execute(
+        select(Submission, Solution)
+        .join(Solution, Solution.id == Submission.solution_id)
+        .where(Solution.scenario_id == scenario.id)
+    ).all()
+    for submission, solution in rows:
+        submission.status = "needs_repair"
+        submission.distance_score = None
+        submission.time_score = None
+        submission.delta_v_score = None
+        submission.penalty_score = None
+        submission.total_score = None
+        submission.error_message = "Scenario dynamics changed. Run GMAT repair before ranking."
+        submission.updated_at = updated_at
+        if emit_sync_events:
+            session.add(SyncEvent(record_type="solution", record_id=solution.id))
+    return len(rows)
 
 
 def _validation_error(
@@ -158,14 +193,7 @@ def _validation_error(
             return "Target trajectory intersects the central body."
 
     burns = decision_variables.get("burns", []) if isinstance(decision_variables, dict) else []
-    maximum_burns = limits.get("maximumBurnCount")
-    if maximum_burns is not None and len(burns) > int(maximum_burns):
-        return "Burn count exceeds the Scenario maximum."
-    minimum_burns = limits.get("minimumBurnCount")
-    if minimum_burns is not None and len(burns) < int(minimum_burns):
-        return "Burn count is below the Scenario minimum."
-
-    delta_v_per_burn_limit = limits.get("maximumDeltaVPerBurn", limits.get("maximumTotalDeltaV"))
+    delta_v_per_burn_limit = limits.get("maximumDeltaVPerBurn")
     if delta_v_per_burn_limit is not None and any(
         math.hypot(*burn.get("deltaV", ())) > float(delta_v_per_burn_limit) for burn in burns
     ):

@@ -88,3 +88,44 @@ test("converts an ISO UTC epoch to GMAT UTCGregorian format", () => {
   });
   assert.match(script, /Epoch = '29 Aug 2026 05:00:00\.000'/);
 });
+
+test("adds OpenFrames animation and inspection metrics only to downloaded scripts", () => {
+  const value = scenario({ centralBody: "Earth", gravity: { enabled: false } });
+  value.scenarioJson.validation = {
+    requiredFinalDistanceKm: 5,
+    maximumDeltaVPerBurn: 6,
+  };
+  const variables = {
+    tWait: 0,
+    finalCoastTime: 100,
+    burns: [
+      { deltaV: [3, 4, 0], timeToNextBurn: 20 },
+      { deltaV: [0, 0, 2] },
+    ],
+  };
+  const workerScript = generateGmatScript({
+    scenario: value,
+    finalDecisionVariables: variables,
+    reportPath: "/tmp/report.txt",
+  });
+  const downloadScript = generateGmatScript({
+    scenario: value,
+    finalDecisionVariables: variables,
+    reportPath: "Mission_Validation_Report.txt",
+    inspectionReportPath: "Mission_Validation_Inspection.txt",
+    includeVisualization: true,
+  });
+
+  assert.doesNotMatch(workerScript, /OpenFramesInterface/);
+  assert.doesNotMatch(workerScript, /InspectionReport/);
+  assert.match(downloadScript, /Create OpenFramesView ValidationOrbitView_View;/);
+  assert.match(downloadScript, /Create OpenFramesInterface ValidationOrbitView;/);
+  assert.match(downloadScript, /ValidationOrbitView\.DrawTrajectory = \[true true true\];/);
+  assert.match(downloadScript, /GMAT Burn1DeltaVNormKmPerS = 5;/);
+  assert.match(downloadScript, /GMAT Burn2DeltaVNormKmPerS = 2;/);
+  assert.match(downloadScript, /GMAT RequiredFinalDistanceKm = 5;/);
+  assert.match(downloadScript, /GMAT FinalDistanceKm = sqrt\(/);
+  assert.match(downloadScript, /GMAT InspectionReport\.WriteReport = true;/);
+  assert.match(downloadScript, /GMAT InspectionReport\.AppendToExistingFile = false;/);
+  assert.match(downloadScript, /Report InspectionReport FinalDistanceKm RequiredFinalDistanceKm MaximumDeltaVPerBurnKmPerS Burn1DeltaVNormKmPerS Burn2DeltaVNormKmPerS;/);
+});

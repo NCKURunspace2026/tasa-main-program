@@ -10,10 +10,11 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..services.solution_query_service import (
     get_solution_detail,
+    rename_solution,
     set_solution_deleted,
     update_solution_validation,
 )
-from ..schemas.submission import SolutionRevalidationInput
+from ..schemas.submission import SolutionRenameInput, SolutionRevalidationInput
 
 router = APIRouter(prefix="/api/solutions", tags=["solutions"])
 
@@ -45,7 +46,19 @@ def delete_solution(solution_id: str, session: Session = Depends(get_db)):
     return result
 
 
-@router.post("/{solution_id}/revalidate")
+@router.patch("/{solution_id}/name", dependencies=[Depends(require_admin_token)])
+def update_solution_name(
+    solution_id: str,
+    payload: SolutionRenameInput,
+    session: Session = Depends(get_db),
+):
+    result = rename_solution(session, solution_id, payload.name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Solution not found.")
+    return result
+
+
+@router.post("/{solution_id}/revalidate", dependencies=[Depends(require_admin_token)])
 def revalidate_solution(
     solution_id: str,
     payload: SolutionRevalidationInput,
