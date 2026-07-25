@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base, Scenario, SyncEvent, SyncRelayState
+from .services.validation_result_service import recompute_scenario_submissions
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -120,6 +121,13 @@ def initialize_database() -> None:
         if session.query(SyncEvent).count() == 0:
             for scenario_id in session.scalars(select(Scenario.id)).all():
                 session.add(SyncEvent(record_type="scenario", record_id=scenario_id))
+        recompute_started_at = datetime.now(timezone.utc)
+        for scenario in session.scalars(select(Scenario)).all():
+            recompute_scenario_submissions(
+                session,
+                scenario,
+                updated_at=recompute_started_at,
+            )
 
 
 def _add_soft_delete_columns_for_existing_database() -> None:
