@@ -5,6 +5,12 @@ import "./Submissions.css";
 import PageHeader from "../components/PageHeader.jsx";
 import useScenarios from "../hooks/useScenarios.js";
 import { createSubmission, runDataSync } from "../services/api.js";
+import {
+  formatDeltaVVector,
+  normalizeSubmissionFile,
+  parseMatlabDecisionVariables,
+  parseDeltaVVector,
+} from "./submissionInput.js";
 
 const validationDefinitions = [
   {
@@ -36,9 +42,7 @@ const validationDefinitions = [
 function createEmptyBurn() {
   return {
     id: crypto.randomUUID(),
-    deltaVX: "",
-    deltaVY: "",
-    deltaVZ: "",
+    deltaV: "",
     coastTime: "",
   };
 }
@@ -90,6 +94,10 @@ export default function Submissions({ onNavigate }) {
 
   const [validationState, setValidationState] =
     useState(initialValidationState);
+  const [importMessage, setImportMessage] = useState(null);
+  const [inputMode, setInputMode] = useState("matlab");
+  const [matlabSource, setMatlabSource] = useState("");
+  const [matlabPreview, setMatlabPreview] = useState(null);
 
   const validationRunRef = useRef(0);
 
@@ -119,6 +127,10 @@ export default function Submissions({ onNavigate }) {
   }
 
   function addBurn() {
+    if (burns.length >= 100) {
+      setImportMessage({ type: "error", text: "A submission can contain at most 100 burns." });
+      return;
+    }
     setBurns((previousBurns) => [
       ...previousBurns,
       createEmptyBurn(),
@@ -128,15 +140,9 @@ export default function Submissions({ onNavigate }) {
   }
 
   function removeBurn(burnId) {
-    setBurns((previousBurns) => {
-      if (previousBurns.length === 1) {
-        return previousBurns;
-      }
-
-      return previousBurns.filter(
-        (burn) => burn.id !== burnId,
-      );
-    });
+    setBurns((previousBurns) => previousBurns.filter(
+      (burn) => burn.id !== burnId,
+    ));
 
     resetValidation();
   }
@@ -157,6 +163,54 @@ export default function Submissions({ onNavigate }) {
       ),
     );
     resetValidation();
+  }
+
+  async function importSubmissionFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const imported = normalizeSubmissionFile(JSON.parse(await file.text()));
+      applyImportedDecisionVariables(imported);
+      setInputMode("manual");
+      setImportMessage({ type: "success", text: `${file.name} loaded. Review the values, then validate.` });
+      resetValidation();
+    } catch (error) {
+      setImportMessage({
+        type: "error",
+        text: error instanceof SyntaxError ? "The selected file is not valid JSON." : error.message,
+      });
+    }
+  }
+
+  function applyImportedDecisionVariables(imported) {
+    if (imported.scenarioId && !scenarioOptions.some((item) => item.id === imported.scenarioId)) {
+      throw new Error(`Scenario ${imported.scenarioId} is not active on this device.`);
+    }
+    if (imported.scenarioId) setScenarioId(imported.scenarioId);
+    setManualValues({
+      team: imported.name,
+      initialCoastTime: String(imported.tWait),
+      finalCoastTime: String(imported.finalCoastTime),
+    });
+    setBurns(imported.burns.map((burn) => ({
+      id: crypto.randomUUID(),
+      deltaV: formatDeltaVVector(burn.deltaV),
+      coastTime: burn.coastTime == null ? "" : String(burn.coastTime),
+    })));
+  }
+
+  function parseMatlabInput() {
+    try {
+      const parsed = parseMatlabDecisionVariables(matlabSource);
+      applyImportedDecisionVariables(parsed);
+      setMatlabPreview(parsed);
+      setImportMessage({ type: "success", text: "MATLAB Decision Variables detected. Review the table below." });
+      resetValidation();
+    } catch (error) {
+      setMatlabPreview(null);
+      setImportMessage({ type: "error", text: error.message });
+    }
   }
 
   function handleManualSubmit(event) {
@@ -192,9 +246,7 @@ export default function Submissions({ onNavigate }) {
 
     const hasInvalidBurn = burns.some(
       (burn, index) =>
-        !isValidNumber(burn.deltaVX) ||
-        !isValidNumber(burn.deltaVY) ||
-        !isValidNumber(burn.deltaVZ) ||
+        !isValidDeltaVVector(burn.deltaV) ||
         (index < burns.length - 1 &&
           (!isValidNumber(burn.coastTime) ||
             Number(burn.coastTime) < 0)),
@@ -220,11 +272,7 @@ export default function Submissions({ onNavigate }) {
     const finalDecisionVariables = {
       tWait: Number(manualValues.initialCoastTime),
       burns: burns.map((burn, index) => ({
-        deltaV: [
-          Number(burn.deltaVX),
-          Number(burn.deltaVY),
-          Number(burn.deltaVZ),
-        ],
+        deltaV: parseDeltaVVector(burn.deltaV),
         ...(index < burns.length - 1
           ? { timeToNextBurn: Number(burn.coastTime) }
           : {}),
@@ -414,6 +462,14 @@ export default function Submissions({ onNavigate }) {
               onBurnChange={handleBurnChange}
               onAddBurn={addBurn}
               onRemoveBurn={removeBurn}
+              onImport={importSubmissionFile}
+              importMessage={importMessage}
+              inputMode={inputMode}
+              onInputModeChange={(mode) => { setInputMode(mode); setImportMessage(null); }}
+              matlabSource={matlabSource}
+              onMatlabSourceChange={setMatlabSource}
+              matlabPreview={matlabPreview}
+              onParseMatlab={parseMatlabInput}
               onSubmit={handleManualSubmit}
               canSubmit={scenariosLoaded && scenarioOptions.length > 0}
             />
@@ -443,6 +499,15 @@ function formatValidationFailure(result) {
 
 function formatMetric(value) {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(6) : String(value);
+}
+
+function isValidDeltaVVector(value) {
+  try {
+    parseDeltaVVector(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function SubmissionScenarioSummary({ scenario }) {
@@ -494,6 +559,14 @@ function ManualSubmission({
   onBurnChange,
   onAddBurn,
   onRemoveBurn,
+  onImport,
+  importMessage,
+  inputMode,
+  onInputModeChange,
+  matlabSource,
+  onMatlabSourceChange,
+  matlabPreview,
+  onParseMatlab,
   onSubmit,
   canSubmit,
 }) {
@@ -502,6 +575,47 @@ function ManualSubmission({
       className="manual-submission-form"
       onSubmit={onSubmit}
     >
+      <div className="submission-input-modes" role="tablist" aria-label="Decision variable input mode">
+        <button type="button" className={inputMode === "matlab" ? "is-active" : ""} onClick={() => onInputModeChange("matlab")}>Paste MATLAB</button>
+        <label className={`submission-mode-button${inputMode === "manual" ? " is-active" : ""}`}>
+          Import JSON
+          <input type="file" accept=".json,application/json" onChange={onImport} hidden />
+        </label>
+        <button type="button" className={inputMode === "manual" ? "is-active" : ""} onClick={() => onInputModeChange("manual")}>Manual table</button>
+      </div>
+      {importMessage ? (
+        <p className={`submission-import-message is-${importMessage.type}`}>{importMessage.text}</p>
+      ) : null}
+      {inputMode === "matlab" ? (
+        <div className="matlab-input-workspace">
+          <label className="matlab-source-field">
+            <span>Paste MATLAB Command Window output</span>
+            <textarea
+              value={matlabSource}
+              onChange={(event) => onMatlabSourceChange(event.target.value)}
+              placeholder={'tWait0 = 0;\n\ndeltaV0 = [\n  0.1  0.0  0.0\n  0.0 -0.05  0.0\n  0.0  0.0  0.0\n];\n\ndeltaT0 = [100; 100];\n\ntCoast0 = 5000;'}
+              spellCheck="false"
+            />
+          </label>
+          <button className="submission-primary-button" type="button" onClick={onParseMatlab}>Detect Decision Variables</button>
+          {matlabPreview ? <DecisionVariablePreview decisionVariables={matlabPreview} onEditManual={() => onInputModeChange("manual")} /> : null}
+        </div>
+      ) : null}
+      <details className="submission-format-help">
+        <summary>JSON format</summary>
+        <pre>{`{
+  "scenarioId": "SC-001",
+  "name": "Apex Trajectory",
+  "initialCoastTimeS": 0,
+  "burns": [
+    { "deltaV": { "x": 0.1, "y": 0, "z": 0 }, "timeToNextBurnS": 100 },
+    { "deltaV": { "x": 0, "y": -0.05, "z": 0 } }
+  ],
+  "finalCoastTimeS": 5000
+}`}</pre>
+      </details>
+
+      {inputMode === "manual" ? <>
       <div className="manual-form-grid manual-form-grid-primary">
         <TextField
           label="Team / Method"
@@ -550,49 +664,12 @@ function ManualSubmission({
             </header>
 
             <div className="manual-vector-grid">
-              <NumericField
-                label="Delta-V X"
-                value={burn.deltaVX}
-                placeholder="0.0000"
+              <VectorField
+                label="Delta-V vector"
+                value={burn.deltaV}
+                placeholder="[0.0000, 0.0000, 0.0000]"
                 suffix="km/s"
-                allowNegative
-                onChange={(value) =>
-                  onBurnChange(
-                    burn.id,
-                    "deltaVX",
-                    value,
-                  )
-                }
-              />
-
-              <NumericField
-                label="Delta-V Y"
-                value={burn.deltaVY}
-                placeholder="0.0000"
-                suffix="km/s"
-                allowNegative
-                onChange={(value) =>
-                  onBurnChange(
-                    burn.id,
-                    "deltaVY",
-                    value,
-                  )
-                }
-              />
-
-              <NumericField
-                label="Delta-V Z"
-                value={burn.deltaVZ}
-                placeholder="0.0000"
-                suffix="km/s"
-                allowNegative
-                onChange={(value) =>
-                  onBurnChange(
-                    burn.id,
-                    "deltaVZ",
-                    value,
-                  )
-                }
+                onChange={(value) => onBurnChange(burn.id, "deltaV", value)}
               />
 
               <NumericField
@@ -643,10 +720,41 @@ function ManualSubmission({
           disabled={!canSubmit}
         >
           <ValidationIcon />
-          {canSubmit ? "Validate Manual Input" : "No Active Scenario"}
+          {canSubmit ? "Validate Input" : "No Active Scenario"}
         </button>
       </div>
+      </> : null}
     </form>
+  );
+}
+
+function DecisionVariablePreview({ decisionVariables, onEditManual }) {
+  const shape = decisionVariables.matrixShape;
+  return (
+    <div className="decision-variable-preview">
+      <div className="decision-variable-detected">
+        <strong>Detected</strong>
+        <span>N = {decisionVariables.burns.length}</span>
+        <span>deltaV0 = {decisionVariables.matrixShape?.deltaVRows ?? 3} × {decisionVariables.matrixShape?.deltaVColumns ?? decisionVariables.burns.length}</span>
+        <span>deltaT0 = {decisionVariables.burns.length - 1} × 1</span>
+        {shape ? <span>tWait0 = {decisionVariables.tWait}s, tCoast0 = {decisionVariables.finalCoastTime}s</span> : null}
+      </div>
+      <div className="decision-variable-table-wrap">
+        <table className="decision-variable-table">
+          <thead><tr><th>Burn</th><th>dVx</th><th>dVy</th><th>dVz</th><th>Time to next burn</th></tr></thead>
+          <tbody>{decisionVariables.burns.map((burn, index) => (
+            <tr key={index}>
+              <td>{index + 1}</td>
+              <td>{burn.deltaV[0]}</td><td>{burn.deltaV[1]}</td><td>{burn.deltaV[2]}</td>
+              <td>{burn.coastTime == null ? `Final coast (${decisionVariables.finalCoastTime}s)` : burn.coastTime}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <button type="button" className="submission-secondary-button" onClick={onEditManual}>
+        Edit in Manual table
+      </button>
+    </div>
   );
 }
 
@@ -679,6 +787,26 @@ function TextField({
           required={required}
           onChange={onChange}
         />
+      </div>
+    </label>
+  );
+}
+
+function VectorField({ label, value, placeholder, suffix, onChange }) {
+  return (
+    <label className="manual-form-field manual-vector-field">
+      <span>{label}<strong aria-hidden="true">*</strong></span>
+      <div className="manual-input-wrapper">
+        <input
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          required
+          autoComplete="off"
+          spellCheck="false"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span className="manual-input-suffix">{suffix}</span>
       </div>
     </label>
   );
