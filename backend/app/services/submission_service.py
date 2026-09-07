@@ -54,6 +54,10 @@ def create_submission(session: Session, payload: SubmissionInput) -> dict:
     scenario = scenario_repository.find_by_id(session, payload.scenarioId)
     if scenario is None or scenario.status != "active":
         raise ScenarioNotFoundError(f"Active scenario {payload.scenarioId} does not exist.")
+    if scenario.scenario_json.get("competitionMode", "single-team-interception") == "two-team-pursuit":
+        raise ValueError(
+            "Two-team pursuit submissions are reserved for a future ruleset and are not open yet."
+        )
     _check_local_validation(payload, scenario.scenario_json)
 
     solution = Solution(

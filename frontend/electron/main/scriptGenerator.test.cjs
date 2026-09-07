@@ -129,3 +129,54 @@ test("adds OpenFrames animation and inspection metrics only to downloaded script
   assert.match(downloadScript, /GMAT InspectionReport\.AppendToExistingFile = false;/);
   assert.match(downloadScript, /Report InspectionReport FinalDistanceKm RequiredFinalDistanceKm MaximumDeltaVPerBurnKmPerS Burn1DeltaVNormKmPerS Burn2DeltaVNormKmPerS;/);
 });
+
+test("formats Leaderboard downloads like the reference GMAT script without changing dynamics", () => {
+  const value = scenario({ centralBody: "Earth", gravity: { enabled: false } });
+  const variables = {
+    tWait: 10,
+    finalCoastTime: 100,
+    burns: [
+      { deltaV: [0.1, -0.2, 0.3], timeToNextBurn: 20 },
+      { deltaV: [0, 0, 0.5] },
+    ],
+  };
+  const script = generateGmatScript({
+    scenario: value,
+    finalDecisionVariables: variables,
+    reportPath: "ODC_2026_Team22.txt",
+    inspectionReportPath: "ODC_2026_Team22_Inspection.txt",
+    includeVisualization: true,
+    outputProfile: "leaderboard",
+  });
+
+  assert.match(script, /^%General Mission Analysis Tool\(GMAT\) Script/);
+  assert.match(script, /%---------- Spacecraft/);
+  assert.match(script, /Create Spacecraft SC_Alien;[\s\S]*Create Spacecraft SC_Human;/);
+  assert.match(script, /SC_Alien\.OrbitColor = Red;/);
+  assert.match(script, /SC_Human\.OrbitColor = Green;/);
+  assert.match(script, /Create ForceModel DefaultProp_ForceModel;/);
+  assert.match(script, /DefaultProp_ForceModel\.GravityField\.Earth\.Degree = 0;/);
+  assert.match(script, /Create Propagator DefaultProp;/);
+  assert.match(script, /Create ImpulsiveBurn ImpulsiveBurn1;/);
+  assert.match(script, /ImpulsiveBurn1\.Isp = 300;/);
+  assert.match(script, /Create OpenFramesInterface DefaultOrbitView;/);
+  assert.match(script, /DefaultOrbitView\.Add = \{SC_Alien, SC_Human, Earth\};/);
+  assert.match(script, /Create GroundTrack DefaultGroundTrackPlot;/);
+  assert.match(script, /Create ReportFile ReportFile1;/);
+  assert.match(script, /ReportFile1\.FixedWidth = true;/);
+  assert.match(script, /ReportFile1\.Add = \{SC_Alien\.ElapsedSecs, SC_Alien\.EarthMJ2000Eq\.X, SC_Alien\.EarthMJ2000Eq\.Y, SC_Alien\.EarthMJ2000Eq\.Z, SC_Alien\.EarthMJ2000Eq\.VX, SC_Alien\.EarthMJ2000Eq\.VY, SC_Alien\.EarthMJ2000Eq\.VZ, SC_Human\.ElapsedSecs, SC_Human\.EarthMJ2000Eq\.Y, SC_Human\.EarthMJ2000Eq\.X, SC_Human\.EarthMJ2000Eq\.VX, SC_Human\.EarthMJ2000Eq\.VY, SC_Human\.EarthMJ2000Eq\.VZ, SC_Human\.EarthMJ2000Eq\.Z\};/);
+  assert.match(script, /Maneuver ImpulsiveBurn1\(SC_Human\);/);
+  assert.match(script, /Propagate DefaultProp\(SC_Alien, SC_Human\) \{SC_Alien\.ElapsedSecs = 20, SC_Human\.ElapsedSecs = 20\};/);
+  assert.doesNotMatch(script, /^GMAT /m);
+  assert.doesNotMatch(script, /Maneuver ImpulsiveBurn1\(SC_Alien\)/);
+});
+
+test("reserves two-team pursuit generation until its ruleset is defined", () => {
+  const value = scenario({ centralBody: "Earth" });
+  value.scenarioJson.competitionMode = "two-team-pursuit";
+  assert.throws(() => generateGmatScript({
+    scenario: value,
+    finalDecisionVariables: decisionVariables,
+    reportPath: "/tmp/report.txt",
+  }), /reserved until its ruleset is defined/);
+});

@@ -31,6 +31,7 @@ CELESTIAL_BODIES = {
 }
 ATMOSPHERE_MODELS = {"JacchiaRoberts", "MSISE90"}
 INTEGRATORS = {"RungeKutta89", "PrinceDormand78", "RungeKutta68", "RungeKutta56"}
+COMPETITION_MODES = {"single-team-interception", "two-team-pursuit"}
 
 
 def _finite_number(value: object, label: str, *, minimum: float | None = None) -> float:
@@ -186,6 +187,10 @@ def normalize_scenario(definition: dict) -> dict:
     if schema_version < 1:
         raise InvalidScenarioError("schemaVersion must be at least 1.")
     normalized["schemaVersion"] = schema_version
+    competition_mode = definition.get("competitionMode", "single-team-interception")
+    if competition_mode not in COMPETITION_MODES:
+        raise InvalidScenarioError(f"Unsupported competitionMode: {competition_mode}.")
+    normalized["competitionMode"] = competition_mode
     normalized["spacecraft"] = normalized_spacecraft
     normalized["forceModel"] = _normalize_force_model(definition["forceModel"])
     propagator = definition.get("propagator")

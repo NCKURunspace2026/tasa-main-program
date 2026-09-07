@@ -10,7 +10,9 @@ from ..models import Scenario, Solution, Submission, SyncEvent
 from .score_service import InvalidScoreConfigError, calculate_score
 
 
-DYNAMICS_FIELDS = ("epoch", "coordinateSystem", "spacecraft", "forceModel", "propagator")
+DYNAMICS_FIELDS = (
+    "competitionMode", "epoch", "coordinateSystem", "spacecraft", "forceModel", "propagator",
+)
 
 
 @dataclass(frozen=True)

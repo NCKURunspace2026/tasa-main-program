@@ -201,6 +201,7 @@ app.whenReady().then(async () => {
       reportPath: path.join(outputDirectory, `${baseName}_Report.txt`),
       inspectionReportPath: path.join(outputDirectory, `${baseName}_Inspection.txt`),
       includeVisualization: true,
+      outputProfile: "leaderboard",
     });
     fs.writeFileSync(scriptPath, script, "utf8");
     return { saved: true, filePath: scriptPath, outputDirectory };

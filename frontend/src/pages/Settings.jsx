@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./Pages.css";
 import "./Settings.css";
 
 import PageHeader from "../components/PageHeader.jsx";
+import CompetitionModeBanner from "../components/CompetitionModeBanner.jsx";
+import { competitionModeLabel, scenarioCompetitionMode } from "../competitionMode.js";
 import {
   createScenario,
   deleteScenario,
@@ -59,6 +61,7 @@ const emptyScenarioLimits = {
 
 const starterScenarioDefinition = {
   schemaVersion: 1,
+  competitionMode: "single-team-interception",
   epoch: { value: "29 Aug 2026 05:00:00.000", timeSystem: "UTCGregorian" },
   coordinateSystem: "EarthMJ2000Eq",
   spacecraft: {
@@ -116,28 +119,39 @@ const starterScenarioDefinition = {
   },
 };
 
-const scenarioPackageTemplate = {
+const baseScenarioPackageTemplate = {
   name: "Rendezvous Challenge",
   description: "Chaser performs one or more impulsive maneuvers to intercept the target within the configured distance threshold.",
   scenarioJson: starterScenarioDefinition,
 };
 
-function newScenarioForm() {
+function scenarioPackageTemplate(competitionMode) {
   return {
-    name: "",
-    description: "",
-    scenarioJson: JSON.stringify(starterScenarioDefinition, null, 2),
+    ...baseScenarioPackageTemplate,
+    scenarioJson: {
+      ...baseScenarioPackageTemplate.scenarioJson,
+      competitionMode,
+    },
   };
 }
 
-export default function Settings() {
+function newScenarioForm(competitionMode) {
+  const template = scenarioPackageTemplate(competitionMode);
+  return {
+    name: "",
+    description: "",
+    scenarioJson: JSON.stringify(template.scenarioJson, null, 2),
+  };
+}
+
+export default function Settings({ competitionMode = "single-team-interception" }) {
   const canAdmin = Boolean(window.missionDashboardDesktop?.localAdminRequest);
   const visibleSections = sections.filter(([id]) => !id.startsWith("scenario-") || canAdmin);
   const [activeSection, setActiveSection] = useState("connection");
   const [settings, setSettings] = useState(defaultSettings);
   const [message, setMessage] = useState("");
   const [scenarios, setScenarios] = useState([]);
-  const [scenarioForm, setScenarioForm] = useState(newScenarioForm);
+  const [scenarioForm, setScenarioForm] = useState(() => newScenarioForm(competitionMode));
   const [isPublishing, setIsPublishing] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [scenarioDetails, setScenarioDetails] = useState({ name: "", description: "" });
@@ -150,7 +164,39 @@ export default function Settings() {
   const [showScenarioFormat, setShowScenarioFormat] = useState(false);
   const [scenarioRemoval, setScenarioRemoval] = useState(null);
   const [scenarioRemovalConfirmation, setScenarioRemovalConfirmation] = useState("");
+  const activeScenarioPackageTemplate = scenarioPackageTemplate(competitionMode);
+  const visibleScenarios = useMemo(
+    () => scenarios.filter((scenario) => scenarioCompetitionMode(scenario) === competitionMode),
+    [competitionMode, scenarios],
+  );
+
+  useEffect(() => {
+    setScenarioForm((current) => {
+      try {
+        const scenarioJson = JSON.parse(current.scenarioJson);
+        return {
+          ...current,
+          scenarioJson: JSON.stringify({ ...scenarioJson, competitionMode }, null, 2),
+        };
+      } catch {
+        return current;
+      }
+    });
+  }, [competitionMode]);
   const [isRemovingScenario, setIsRemovingScenario] = useState(false);
+
+  useEffect(() => {
+    const scenario = visibleScenarios.find((item) => item.scenarioId === selectedScenarioId)
+      ?? visibleScenarios[0];
+    setSelectedScenarioId(scenario?.scenarioId ?? "");
+    setScenarioDetails({
+      name: scenario?.name ?? "",
+      description: scenario?.description ?? "",
+    });
+    setScenarioLimits(scenario ? readScenarioLimits(scenario.scenarioJson) : emptyScenarioLimits);
+    setScriptPreview("");
+    setScriptPreviewError("");
+  }, [competitionMode, selectedScenarioId, visibleScenarios]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -291,22 +337,22 @@ export default function Settings() {
   }
 
   async function copyScenarioFormat() {
-    const text = JSON.stringify(scenarioPackageTemplate, null, 2);
+    const text = JSON.stringify(activeScenarioPackageTemplate, null, 2);
     try {
       await navigator.clipboard.writeText(text);
       setMessage("Scenario JSON package template copied.");
     } catch {
       setScenarioForm({
-        name: scenarioPackageTemplate.name,
-        description: scenarioPackageTemplate.description,
-        scenarioJson: JSON.stringify(scenarioPackageTemplate.scenarioJson, null, 2),
+        name: activeScenarioPackageTemplate.name,
+        description: activeScenarioPackageTemplate.description,
+        scenarioJson: JSON.stringify(activeScenarioPackageTemplate.scenarioJson, null, 2),
       });
       setMessage("Clipboard is unavailable. The template was loaded into the form instead.");
     }
   }
 
   function downloadScenarioFormat() {
-    const blob = new Blob([JSON.stringify(scenarioPackageTemplate, null, 2)], {
+    const blob = new Blob([JSON.stringify(activeScenarioPackageTemplate, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -393,7 +439,10 @@ export default function Settings() {
       const created = await createScenario({
         name: scenarioForm.name.trim(),
         description: scenarioForm.description.trim(),
-        scenarioJson: JSON.parse(scenarioForm.scenarioJson),
+        scenarioJson: {
+          ...JSON.parse(scenarioForm.scenarioJson),
+          competitionMode,
+        },
       });
       setScenarios((current) => [...current, created].sort(
         (left, right) => left.scenarioId.localeCompare(right.scenarioId),
@@ -401,7 +450,7 @@ export default function Settings() {
       setSelectedScenarioId(created.scenarioId);
       setScenarioDetails({ name: created.name, description: created.description });
       setScenarioLimits(readScenarioLimits(created.scenarioJson));
-      setScenarioForm(newScenarioForm());
+      setScenarioForm(newScenarioForm(competitionMode));
       setMessage(`${created.scenarioId} published.`);
       runDataSync().catch(() => {});
     } catch (error) {
@@ -422,7 +471,10 @@ export default function Settings() {
       setScenarioForm({
         name: String(data.name ?? ""),
         description: String(data.description ?? ""),
-        scenarioJson: JSON.stringify(data.scenarioJson ?? data.definition ?? {}, null, 2),
+        scenarioJson: JSON.stringify({
+          ...(data.scenarioJson ?? data.definition ?? {}),
+          competitionMode,
+        }, null, 2),
       });
       setMessage(`${file.name} loaded. Review it before publishing.`);
       setActiveSection("scenario-publish");
@@ -590,12 +642,13 @@ export default function Settings() {
       setScenarios((current) => {
         const next = current.filter((item) => item.scenarioId !== scenarioRemoval.scenarioId);
         if (selectedScenarioId === scenarioRemoval.scenarioId) {
-          setSelectedScenarioId(next[0]?.scenarioId ?? "");
+          const nextVisible = next.filter((item) => scenarioCompetitionMode(item) === competitionMode);
+          setSelectedScenarioId(nextVisible[0]?.scenarioId ?? "");
           setScenarioDetails({
-            name: next[0]?.name ?? "",
-            description: next[0]?.description ?? "",
+            name: nextVisible[0]?.name ?? "",
+            description: nextVisible[0]?.description ?? "",
           });
-          setScenarioLimits(next[0] ? readScenarioLimits(next[0].scenarioJson) : emptyScenarioLimits);
+          setScenarioLimits(nextVisible[0] ? readScenarioLimits(nextVisible[0].scenarioJson) : emptyScenarioLimits);
         }
         return next;
       });
@@ -610,7 +663,7 @@ export default function Settings() {
     }
   }
 
-  const selectedScenario = scenarios.find((item) => item.scenarioId === selectedScenarioId);
+  const selectedScenario = visibleScenarios.find((item) => item.scenarioId === selectedScenarioId);
 
   return (
     <section className="settings-page">
@@ -618,6 +671,8 @@ export default function Settings() {
         title="Settings"
         description="This application validates once with local GMAT and stores mission data in this device's SQLite database."
       />
+
+      <CompetitionModeBanner mode={competitionMode} scenarioCount={visibleScenarios.length} />
 
       <div className="settings-layout">
         <aside className="settings-navigation">
@@ -756,7 +811,8 @@ export default function Settings() {
                 <SettingsRow label="Edit published Scenario" interactiveGroup>
                   <div className="settings-input-action">
                     <select value={selectedScenarioId} onChange={selectScenarioForEditing} required>
-                      {scenarios.map((scenario) => (
+                      {visibleScenarios.length === 0 ? <option value="">No matching Scenario</option> : null}
+                      {visibleScenarios.map((scenario) => (
                         <option key={scenario.scenarioId} value={scenario.scenarioId}>
                           {scenario.scenarioId}: {scenario.name}
                         </option>
@@ -864,6 +920,7 @@ export default function Settings() {
                 <div>
                   <code>scenarioId</code><span>Assigned automatically when the Scenario is published.</span>
                   <code>name / description</code><span>Package fields shown in Scenario selectors and administration.</span>
+                  <code>competitionMode</code><span><code>single-team-interception</code> or reserved <code>two-team-pursuit</code></span>
                   <code>epoch</code><span>Initial epoch and time system</span>
                   <code>spacecraft.target / chaser</code><span>Cartesian position (km) and velocity (km/s)</span>
                   <code>forceModel</code><span>Gravity, third bodies, drag, SRP, and relativity</span>
@@ -886,7 +943,7 @@ export default function Settings() {
                     <strong>Complete Scenario package format</strong>
                     <span>Load JSON Package accepts this full object. The manual form below separates name, description, and scenarioJson into individual fields. Scenario ID is generated automatically.</span>
                   </div>
-                  <pre>{JSON.stringify(scenarioPackageTemplate, null, 2)}</pre>
+                  <pre>{JSON.stringify(activeScenarioPackageTemplate, null, 2)}</pre>
                 </div>
               ) : null}
               <label className="settings-secondary-button settings-file-button">
@@ -982,6 +1039,7 @@ function ScenarioOverview({ scenario }) {
       <div className="scenario-overview-grid">
         <ScenarioOverviewItem label="Epoch" value={definition.epoch?.value ?? definition.epoch ?? "Not set"} />
         <ScenarioOverviewItem label="Coordinate system" value={definition.coordinateSystem ?? "EarthMJ2000Eq"} />
+        <ScenarioOverviewItem label="Competition mode" value={competitionModeLabel(definition.competitionMode)} />
         <ScenarioOverviewItem label="Initial distance" value={initialDistance == null ? "Unknown" : `${initialDistance.toFixed(6)} km`} />
         <ScenarioOverviewItem label="Target r0" value={formatVector(target.positionKm, "km")} wide />
         <ScenarioOverviewItem label="Target v0" value={formatVector(target.velocityKmPerSec, "km/s")} wide />
@@ -1055,7 +1113,11 @@ function ScenarioSelectField({ label, description, name, value, onChange, option
   return (
     <SettingsRow label={label} description={description}>
       <select name={name} value={value} onChange={onChange} disabled={disabled}>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {options.map((option) => {
+          const optionValue = typeof option === "string" ? option : option.value;
+          const optionLabel = typeof option === "string" ? option : option.label;
+          return <option key={optionValue} value={optionValue}>{optionLabel}</option>;
+        })}
       </select>
     </SettingsRow>
   );

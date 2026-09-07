@@ -3,7 +3,9 @@ import "./Pages.css";
 import "./Leaderboard.css";
 
 import PageHeader from "../components/PageHeader.jsx";
+import CompetitionModeBanner from "../components/CompetitionModeBanner.jsx";
 import useScenarios from "../hooks/useScenarios.js";
+import { scenarioCompetitionMode, TWO_TEAM_MODE } from "../competitionMode.js";
 import { deleteSolution, downloadDataExport, getLeaderboard, getSolutionDetail, renameSolution, revalidateSolution, runDataSync } from "../services/api.js";
 
 import { Table, pixel } from "@astryxdesign/core/Table";
@@ -15,12 +17,16 @@ const detailTabs = [
   ["final", "Decision Variables"],
 ];
 
-export default function Leaderboard() {
+export default function Leaderboard({ competitionMode }) {
   const {
-    scenarioOptions,
+    scenarioOptions: allScenarioOptions,
     scenarioError,
     scenariosLoaded,
   } = useScenarios();
+  const scenarioOptions = useMemo(
+    () => allScenarioOptions.filter((scenario) => scenarioCompetitionMode(scenario) === competitionMode),
+    [allScenarioOptions, competitionMode],
+  );
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const [scenarioId, setScenarioId] = useState(
     query.get("scenarioId") ?? "SC-001",
@@ -33,9 +39,11 @@ export default function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState({ items: [], total: 0 });
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [error, setError] = useState("");
   const [detailError, setDetailError] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [detailRequestVersion, setDetailRequestVersion] = useState(0);
   const [isRemoving, setIsRemoving] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
   const [isDownloadingScript, setIsDownloadingScript] = useState(false);
@@ -51,6 +59,12 @@ export default function Leaderboard() {
   const skipAutoSelectionRef = useRef(false);
 
   useEffect(() => {
+    if (scenariosLoaded && scenarioOptions.length === 0) {
+      setScenarioId("");
+      setSelectedSolutionId(null);
+      setSelectedSolution(null);
+      return;
+    }
     if (
       scenariosLoaded &&
       scenarioOptions.length > 0 &&
@@ -62,6 +76,12 @@ export default function Leaderboard() {
   }, [scenarioId, scenarioOptions, scenariosLoaded]);
 
   useEffect(() => {
+    if (!scenarioId) {
+      setLeaderboard({ items: [], total: 0 });
+      setIsLoading(false);
+      setError("");
+      return undefined;
+    }
     let isCurrent = true;
     setIsLoading(true);
     setError("");
@@ -74,10 +94,15 @@ export default function Leaderboard() {
       .then((result) => {
         if (!isCurrent) return;
         setLeaderboard(result);
-        if (!selectedSolutionId && result.items.length > 0 && !skipAutoSelectionRef.current) {
-          setSelectedSolutionId(result.items[0].solutionId);
-        }
+        const skipAutoSelection = skipAutoSelectionRef.current;
         skipAutoSelectionRef.current = false;
+        if (!skipAutoSelection) {
+          setSelectedSolutionId((currentSolutionId) => (
+            result.items.some((item) => item.solutionId === currentSolutionId)
+            ? currentSolutionId
+            : result.items[0]?.solutionId ?? null
+          ));
+        }
       })
       .catch((requestError) => {
         if (isCurrent) setError(requestError.message);
@@ -89,16 +114,18 @@ export default function Leaderboard() {
     return () => {
       isCurrent = false;
     };
-  }, [scenarioId, search, selectedSolutionId, refreshVersion]);
+  }, [scenarioId, search, refreshVersion]);
 
   useEffect(() => {
     if (!selectedSolutionId) {
       setSelectedSolution(null);
+      setIsDetailLoading(false);
       return undefined;
     }
 
     let isCurrent = true;
     setSelectedSolution(null);
+    setIsDetailLoading(true);
     setDetailError("");
     getSolutionDetail(selectedSolutionId)
       .then((result) => {
@@ -106,16 +133,23 @@ export default function Leaderboard() {
       })
       .catch((requestError) => {
         if (isCurrent) setDetailError(requestError.message);
+      })
+      .finally(() => {
+        if (isCurrent) setIsDetailLoading(false);
       });
 
     return () => {
       isCurrent = false;
     };
-  }, [refreshVersion, selectedSolutionId]);
+  }, [detailRequestVersion, refreshVersion, selectedSolutionId]);
 
   const handleSelectSolution = useCallback((solutionId) => {
     setSelectedSolution(null);
-    setSelectedSolutionId(solutionId);
+    if (solutionId === selectedSolutionId) {
+      setDetailRequestVersion((value) => value + 1);
+    } else {
+      setSelectedSolutionId(solutionId);
+    }
     setSelectedTab("summary");
     const params = new URLSearchParams(window.location.search);
     params.set("page", "leaderboard");
@@ -123,7 +157,15 @@ export default function Leaderboard() {
     params.set("solutionId", solutionId);
     window.history.replaceState({}, "", `?${params.toString()}`);
     requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
-  }, [scenarioId]);
+  }, [scenarioId, selectedSolutionId]);
+
+  const handleTableInteraction = useCallback((event) => {
+    if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest("[data-solution-id]");
+    if (!row) return;
+    if (event.type === "keydown") event.preventDefault();
+    handleSelectSolution(row.dataset.solutionId);
+  }, [handleSelectSolution]);
 
   const selectionPlugin = useMemo(
     () => ({
@@ -136,18 +178,12 @@ export default function Leaderboard() {
             className: isSelected ? "leaderboard-row is-selected" : "leaderboard-row",
             tabIndex: 0,
             "aria-selected": isSelected,
-            onClick: () => handleSelectSolution(item.solutionId),
-            onKeyDown: (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                handleSelectSolution(item.solutionId);
-              }
-            },
+            "data-solution-id": item.solutionId,
           },
         };
       },
     }),
-    [handleSelectSolution, selectedSolutionId],
+    [selectedSolutionId],
   );
 
   const columns = useMemo(
@@ -195,9 +231,19 @@ export default function Leaderboard() {
   );
 
   function handleScenarioChange(event) {
-    setScenarioId(event.target.value);
+    const nextScenarioId = event.target.value;
+    skipAutoSelectionRef.current = false;
+    setScenarioId(nextScenarioId);
+    setSearch("");
+    setLeaderboard({ items: [], total: 0 });
     setSelectedSolutionId(null);
     setSelectedSolution(null);
+    setDetailError("");
+    const params = new URLSearchParams(window.location.search);
+    params.set("page", "leaderboard");
+    params.set("scenarioId", nextScenarioId);
+    params.delete("solutionId");
+    window.history.replaceState({}, "", `?${params.toString()}`);
   }
 
   function removeSelectedSolution() {
@@ -275,6 +321,9 @@ export default function Leaderboard() {
     setDetailError("");
     try {
       const scenario = scenarioOptions.find((item) => item.id === selectedSolution.scenarioId);
+      if (scenario?.scenarioJson?.competitionMode === "two-team-pursuit") {
+        throw new Error("Two-team pursuit repair is reserved until its ruleset is defined.");
+      }
       if (!window.missionDashboardDesktop?.validateWithLocalGmat) {
         throw new Error("Repair requires the Electron Client app with local GMAT configured.");
       }
@@ -314,6 +363,10 @@ export default function Leaderboard() {
   async function downloadSelectedSolutionScript() {
     if (!selectedSolution || isDownloadingScript) return;
     const scenario = scenarioOptions.find((item) => item.id === selectedSolution.scenarioId);
+    if (scenario?.scenarioJson?.competitionMode === "two-team-pursuit") {
+      setDetailError("Two-team pursuit GMAT export is reserved until its ruleset is defined.");
+      return;
+    }
     if (!scenario?.scenarioJson || Object.keys(scenario.scenarioJson).length === 0) {
       setDetailError("The selected Scenario has no simulation definition.");
       return;
@@ -352,6 +405,8 @@ export default function Leaderboard() {
     }
   }
 
+  const isTwoTeamPursuit = competitionMode === TWO_TEAM_MODE;
+
   return (
     <section className="leaderboard-page">
       <PageHeader
@@ -367,7 +422,7 @@ export default function Leaderboard() {
           type="button"
           title="Download selected Scenario ML dataset"
           aria-label="Download selected Scenario ML dataset"
-          disabled={isExporting}
+          disabled={isExporting || !scenarioId}
           onClick={exportMachineLearningData}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -375,6 +430,8 @@ export default function Leaderboard() {
           </svg>
         </button>
       </PageHeader>
+
+      <CompetitionModeBanner mode={competitionMode} scenarioCount={scenarioOptions.length} />
 
       <section className="leaderboard-panel leaderboard-table-panel">
         <header className="leaderboard-panel-header">
@@ -397,7 +454,7 @@ export default function Leaderboard() {
         {isLoading ? <div className="leaderboard-request-state">Loading leaderboard…</div> : null}
 
         {!error && !isLoading ? (
-          <div className="leaderboard-table-scroll">
+          <div className="leaderboard-table-scroll" onClick={handleTableInteraction} onKeyDown={handleTableInteraction}>
             <Table
               data={leaderboard.items}
               columns={columns}
@@ -427,7 +484,7 @@ export default function Leaderboard() {
                 title="Download GMAT validation script"
                 aria-label="Download GMAT validation script"
                 onClick={downloadSelectedSolutionScript}
-                disabled={isDownloadingScript || isRenaming || isRepairing || isRemoving}
+                disabled={isTwoTeamPursuit || isDownloadingScript || isRenaming || isRepairing || isRemoving}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
@@ -436,7 +493,7 @@ export default function Leaderboard() {
               <button className="solution-rename-button" type="button" onClick={editSelectedSolutionName} disabled={isRenaming || isRepairing || isRemoving}>
                 Rename
               </button>
-              <button className="solution-repair-button" type="button" onClick={repairSelectedSolution} disabled={isRepairing || isRemoving}>
+              <button className="solution-repair-button" type="button" onClick={repairSelectedSolution} disabled={isTwoTeamPursuit || isRepairing || isRemoving}>
                 {isRepairing ? "Repairing..." : "Repair GMAT metrics"}
               </button>
               <button className="solution-remove-button" type="button" onClick={removeSelectedSolution} disabled={isRemoving}>
@@ -447,7 +504,8 @@ export default function Leaderboard() {
         </header>
 
         {detailError ? <div className="leaderboard-request-state is-error">{detailError}</div> : null}
-        {!selectedSolution && !detailError ? (
+        {isDetailLoading ? <div className="leaderboard-empty-state">Loading solution details…</div> : null}
+        {!selectedSolution && !detailError && !isDetailLoading ? (
           <div className="leaderboard-empty-state">Select a solution from the leaderboard to view its details.</div>
         ) : null}
 

@@ -1,0 +1,47 @@
+.competition-mode-banner {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 12px;
+  background: rgba(30, 64, 175, 0.08);
+}
+
+.competition-mode-banner > span {
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.competition-mode-banner > strong {
+  color: var(--text-primary);
+}
+
+.competition-mode-banner > small {
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.competition-mode-banner.is-reserved {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.competition-mode-banner.is-reserved > span {
+  color: #fbbf24;
+}
+
+@media (max-width: 800px) {
+  .competition-mode-banner {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .competition-mode-banner > small {
+    text-align: left;
+  }
+}

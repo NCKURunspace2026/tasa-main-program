@@ -93,6 +93,42 @@
 
 .sidebar.is-collapsed .sidebar-role strong { display: none; }
 
+.sidebar-mode-selector {
+  margin: 12px 14px 18px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid rgba(120, 183, 242, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 31, 52, 0.82);
+}
+
+.sidebar-mode-selector > span {
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sidebar-mode-selector select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  background: #071323;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.sidebar.is-collapsed .sidebar-mode-selector {
+  display: none;
+}
+
 /* 收合時保留 Competition section heading 的垂直空間 */
 .sidebar.is-collapsed .sidebar-content > [role="group"] {
   padding-top: 40px;

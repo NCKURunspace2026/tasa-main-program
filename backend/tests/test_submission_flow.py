@@ -173,6 +173,44 @@ def test_scenario_normalization_removes_legacy_burn_count_limits():
         assert "maximumBurnCount" not in validation
 
 
+def test_scenario_competition_modes_are_normalized_and_reserved_mode_blocks_submissions():
+    single_team = scenario_json()
+    two_team = scenario_json()
+    two_team["competitionMode"] = "two-team-pursuit"
+    with TestClient(app) as client:
+        default_mode = client.post("/api/scenarios", json={
+            "scenarioId": "SC-880",
+            "name": "Default mode",
+            "scenarioJson": single_team,
+        })
+        assert default_mode.status_code == 201
+        assert default_mode.json()["scenarioJson"]["competitionMode"] == "single-team-interception"
+
+        reserved_mode = client.post("/api/scenarios", json={
+            "scenarioId": "SC-881",
+            "name": "Two-team pursuit",
+            "scenarioJson": two_team,
+        })
+        assert reserved_mode.status_code == 201
+        assert reserved_mode.json()["scenarioJson"]["competitionMode"] == "two-team-pursuit"
+
+        payload = submission_payload()
+        payload["scenarioId"] = "SC-881"
+        blocked = client.post("/api/submissions", json=payload)
+        assert blocked.status_code == 422
+        assert "reserved for a future ruleset" in blocked.json()["detail"]
+
+        invalid = scenario_json()
+        invalid["competitionMode"] = "shared-spacecraft"
+        rejected = client.post("/api/scenarios", json={
+            "scenarioId": "SC-882",
+            "name": "Invalid mode",
+            "scenarioJson": invalid,
+        })
+        assert rejected.status_code == 422
+        assert "Unsupported competitionMode" in rejected.json()["detail"]
+
+
 def test_spacecraft_radius_below_central_body_is_rejected():
     payload = submission_payload()
     payload["clientValidation"]["minimumChaserRadiusKm"] = 6000

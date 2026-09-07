@@ -117,6 +117,10 @@ def update_solution_validation(
     scenario = session.get(Scenario, solution.scenario_id)
     if scenario is None:
         raise ValueError("Solution Scenario does not exist.")
+    if scenario.scenario_json.get("competitionMode", "single-team-interception") == "two-team-pursuit":
+        raise ValueError(
+            "Two-team pursuit revalidation is reserved until its ruleset is defined."
+        )
     expected_time = (
         payload.decisionVariables.tWait
         + payload.decisionVariables.finalCoastTime

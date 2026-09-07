@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./Pages.css";
 import "./Submissions.css";
 
 import PageHeader from "../components/PageHeader.jsx";
+import CompetitionModeBanner from "../components/CompetitionModeBanner.jsx";
 import useScenarios from "../hooks/useScenarios.js";
 import { createSubmission, runDataSync } from "../services/api.js";
+import { scenarioCompetitionMode, TWO_TEAM_MODE } from "../competitionMode.js";
 import {
   formatDeltaVVector,
   normalizeSubmissionFile,
@@ -76,12 +78,16 @@ function isValidNumber(value) {
   return Number.isFinite(Number(value));
 }
 
-export default function Submissions({ onNavigate }) {
+export default function Submissions({ onNavigate, competitionMode }) {
   const {
-    scenarioOptions,
+    scenarioOptions: allScenarioOptions,
     scenarioError,
     scenariosLoaded,
   } = useScenarios();
+  const scenarioOptions = useMemo(
+    () => allScenarioOptions.filter((scenario) => scenarioCompetitionMode(scenario) === competitionMode),
+    [allScenarioOptions, competitionMode],
+  );
   const [scenarioId, setScenarioId] =
     useState("SC-001");
 
@@ -102,6 +108,10 @@ export default function Submissions({ onNavigate }) {
   const validationRunRef = useRef(0);
 
   useEffect(() => {
+    if (scenariosLoaded && scenarioOptions.length === 0) {
+      setScenarioId("");
+      return;
+    }
     if (
       scenariosLoaded &&
       scenarioOptions.length > 0 &&
@@ -227,6 +237,17 @@ export default function Submissions({ onNavigate }) {
         submissionId: null,
         solutionId: null,
         executionEvidence: null,
+      });
+      return;
+    }
+
+    if (selectedScenario?.scenarioJson?.competitionMode === "two-team-pursuit") {
+      setValidationState({
+        ...initialValidationState,
+        status: "failed",
+        currentStep: 1,
+        message: "Two-team pursuit is reserved until its submission and scoring rules are published.",
+        checkedAt: new Date(),
       });
       return;
     }
@@ -399,6 +420,7 @@ export default function Submissions({ onNavigate }) {
   }
 
   const selectedScenario = scenarioOptions.find((item) => item.id === scenarioId);
+  const isTwoTeamPursuit = competitionMode === TWO_TEAM_MODE;
 
   return (
     <section className="submissions-page">
@@ -440,9 +462,13 @@ export default function Submissions({ onNavigate }) {
         </div>
       </PageHeader>
 
-      <SubmissionScenarioSummary scenario={selectedScenario} />
+      <CompetitionModeBanner mode={competitionMode} scenarioCount={scenarioOptions.length} />
 
-      <div className="submission-main-layout">
+      {isTwoTeamPursuit ? <TwoTeamReservedWorkspace /> : (
+        <>
+          <SubmissionScenarioSummary scenario={selectedScenario} />
+
+          <div className="submission-main-layout">
         <section className="submission-panel submission-workspace-panel">
           <header className="submission-panel-header">
             <div>
@@ -471,7 +497,7 @@ export default function Submissions({ onNavigate }) {
               matlabPreview={matlabPreview}
               onParseMatlab={parseMatlabInput}
               onSubmit={handleManualSubmit}
-              canSubmit={scenariosLoaded && scenarioOptions.length > 0}
+              canSubmit={scenariosLoaded && scenarioOptions.length > 0 && !isTwoTeamPursuit}
             />
           </div>
         </section>
@@ -486,6 +512,25 @@ export default function Submissions({ onNavigate }) {
             })
           }
         />
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function TwoTeamReservedWorkspace() {
+  return (
+    <section className="two-team-reserved-workspace">
+      <header>
+        <p className="submission-panel-eyebrow">Future competition architecture</p>
+        <h2>Two teams, two controlled spacecraft</h2>
+        <span>Each team will submit Burns for its own spacecraft. Input timing, validation, win conditions, and ranking remain intentionally undefined.</span>
+      </header>
+      <div className="two-team-reserved-grid">
+        <article><span>Team 1</span><strong>SC_Human</strong><small>Independent Burn sequence reserved</small></article>
+        <div aria-hidden="true">vs</div>
+        <article><span>Team 2</span><strong>SC_Alien</strong><small>Independent Burn sequence reserved</small></article>
       </div>
     </section>
   );
@@ -524,6 +569,7 @@ function SubmissionScenarioSummary({ scenario }) {
         <strong>{scenario.id}: {scenario.label.replace(`${scenario.id}: `, "")}</strong>
       </div>
       <div><span>Epoch</span><strong>{definition.epoch?.value ?? definition.epoch ?? "Not set"}</strong></div>
+      <div><span>Competition mode</span><strong>{definition.competitionMode === "two-team-pursuit" ? "Two-team pursuit (reserved)" : "Single-team interception"}</strong></div>
       <div><span>Initial distance</span><strong>{initialDistance == null ? "Unknown" : `${initialDistance.toFixed(6)} km`}</strong></div>
       <div><span>Target r0</span><strong>{formatScenarioVector(target.positionKm, "km")}</strong></div>
       <div><span>Chaser r0</span><strong>{formatScenarioVector(chaser.positionKm, "km")}</strong></div>

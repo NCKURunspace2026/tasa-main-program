@@ -98,7 +98,7 @@ const navigationItems = [
   { id: "leaderboard", label: "Leaderboard", icon: ChartIcon },
 ];
 
-export default function Sidebar({ currentPage, onNavigate }) {
+export default function Sidebar({ currentPage, onNavigate, competitionMode, onCompetitionModeChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const handleNavigate = (pageId) => onNavigate?.(pageId);
 
@@ -129,6 +129,17 @@ export default function Sidebar({ currentPage, onNavigate }) {
             <span />
             <strong>LOCAL DATABASE</strong>
           </div>
+          <label className="sidebar-mode-selector">
+            <span>Active mode</span>
+            <select
+              value={competitionMode}
+              onChange={(event) => onCompetitionModeChange?.(event.target.value)}
+              title="Competition mode for new Scenarios"
+            >
+              <option value="single-team-interception">Single-team interception</option>
+              <option value="two-team-pursuit">Two-team pursuit (reserved)</option>
+            </select>
+          </label>
           <SideNavSection title="Competition">
             {navigationItems.map(({ id, label, icon }) => (
               <SideNavItem

@@ -10,12 +10,12 @@ const pages = {
   settings: Settings,
 };
 
-export default function MainContent({ currentPage, onNavigate }) {
+export default function MainContent({ currentPage, onNavigate, competitionMode }) {
   const CurrentPageComponent = pages[currentPage] ?? Submissions;
 
   return (
     <main className="main-content">
-      <CurrentPageComponent onNavigate={onNavigate} />
+      <CurrentPageComponent onNavigate={onNavigate} competitionMode={competitionMode} />
     </main>
   );
 }

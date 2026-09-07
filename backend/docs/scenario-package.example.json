@@ -4,6 +4,7 @@
   "description": "Two-spacecraft rendezvous example.",
   "scenarioJson": {
     "schemaVersion": 1,
+    "competitionMode": "single-team-interception",
     "epoch": {
       "value": "2026-08-29T05:00:00Z",
       "timeSystem": "UTC"

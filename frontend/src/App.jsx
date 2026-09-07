@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import MainContent from "./components/MainContent";
 import "./App.css";
+import { normalizeCompetitionMode } from "./competitionMode.js";
+
+const COMPETITION_MODE_STORAGE_KEY = "mission-dashboard-competition-mode";
+
+function initialCompetitionMode() {
+  return normalizeCompetitionMode(window.localStorage.getItem(COMPETITION_MODE_STORAGE_KEY));
+}
 
 export default function App() {
   const requestedPage = new URLSearchParams(window.location.search).get("page");
@@ -10,6 +17,7 @@ export default function App() {
     : "submissions";
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [gmatConfig, setGmatConfig] = useState(null);
+  const [competitionMode, setCompetitionMode] = useState(initialCompetitionMode);
 
   useEffect(() => {
     if (!window.missionDashboardDesktop?.getGmatConfig) {
@@ -43,6 +51,12 @@ export default function App() {
     setCurrentPage(page);
   }
 
+  function handleCompetitionModeChange(mode) {
+    const normalizedMode = normalizeCompetitionMode(mode);
+    window.localStorage.setItem(COMPETITION_MODE_STORAGE_KEY, normalizedMode);
+    setCompetitionMode(normalizedMode);
+  }
+
   if (gmatConfig && !gmatConfig.executablePath) {
     return <GmatFirstRunSetup onComplete={setGmatConfig} />;
   }
@@ -52,11 +66,14 @@ export default function App() {
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
+        competitionMode={competitionMode}
+        onCompetitionModeChange={handleCompetitionModeChange}
       />
 
       <MainContent
         currentPage={currentPage}
         onNavigate={handleNavigate}
+        competitionMode={competitionMode}
       />
     </div>
   );
